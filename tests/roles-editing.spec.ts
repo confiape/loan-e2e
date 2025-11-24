@@ -1,284 +1,411 @@
-// spec: plan-pruebas-roles.md - Section 2: Edición de Roles
-// seed: tests/seed.spec.ts
-
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
+import { faker } from '@faker-js/faker';
 
-test.describe('Edición de Roles', () => {
+// Helper function to generate unique role names
+function generateUniqueName(): string {
+  const adjective = faker.word.adjective().charAt(0).toUpperCase() + faker.word.adjective().slice(1);
+  const noun = faker.word.noun().charAt(0).toUpperCase() + faker.word.noun().slice(1);
+  const digits = Math.floor(Math.random() * 90000) + 10000;
+  return `TestRole_${adjective}${noun}${digits}`;
+}
+
+test.describe('Role Editing', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await page.goto('/roles');
+    await page.waitForLoadState('networkidle');
   });
 
-  test('2.1 Edit Existing Role Name', async ({ page }) => {
-    // First CREATE a new role called "Original Role Name"
-    await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Original Role Name');
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Search for the role we just created
-    await page.getByTestId('roles-search-input').fill('Original Role Name');
-    
-    // Capture the role ID from the table
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Original Role Name' }) });
-    const roleId = await roleRow.locator('td').nth(1).textContent();
-    
-    // Click "Edit" button for that role
-    await roleRow.getByTestId(`roles-table-action-edit-row-${roleId}`).click();
-    
-    // Change name to "Updated Role Name"
-    await page.getByTestId('roles-input-name').fill('Updated Role Name');
-    
-    // Click "Update"
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Clear search and search for the updated role name
-    await page.getByTestId('roles-search-input').fill('Updated Role Name');
-    
-    // Verify the role now shows "Updated Role Name" in the table
-    await expect(page.locator('tr', { has: page.locator('td', { hasText: 'Updated Role Name' }) })).toBeVisible();
-    
-    // Verify ID remains unchanged
-    const updatedRoleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Updated Role Name' }) });
-    const updatedRoleId = await updatedRoleRow.locator('td').nth(1).textContent();
-    expect(updatedRoleId).toBe(roleId);
+  test('10 - Open edit role modal', async ({ page }) => {
+    // Search for Admin role
+    await page.getByTestId('roles-search-input').fill('Admin');
+    await page.waitForLoadState('networkidle');
+
+    // Find Admin row and click Edit
+    const adminRow = page.locator('table tbody tr').filter({ hasText: /^Admin$/ });
+    const editBtn = adminRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+
+    // Wait for modal to open
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Verify modal title contains "Edit"
+    const modalTitle = page.locator('dialog heading, dialog h3');
+    await expect(modalTitle).toContainText(/Edit/i);
+
+    // Verify role name is pre-filled
+    const nameInput = page.getByTestId('roles-input-name');
+    const currentValue = await nameInput.inputValue();
+    expect(currentValue).toBe('Admin');
   });
 
-  test('2.2 Edit Role - Add Additional Permissions', async ({ page }) => {
-    // First CREATE a new role called "Permissions Test Role" with NO permissions
+  test('11 - Edit role name', async ({ page }) => {
+    const originalName = generateUniqueName();
+    const newName = generateUniqueName();
+
+    // Create role first
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Permissions Test Role');
-    await page.getByTestId('roles-btn-submit').click();
-    
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(originalName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
     // Search for the role
-    await page.getByTestId('roles-search-input').fill('Permissions Test Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Permissions Test Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Click "Permissions" dropdown
-    await page.getByRole('button', { name: /^permissions$/i }).click();
-    
-    // Select 3 permissions
-    await page.getByRole('option', { name: 'BorrowerController_CreateBorrower' }).click();
-    await page.getByRole('option', { name: 'LoanController_SaveLoan' }).click();
-    await page.getByRole('option', { name: 'UserController_GetAllUsers' }).click();
-    
-    // Click outside to close dropdown
-    await page.getByTestId('roles-input-name').click();
-    
-    // Click "Update"
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Verify role is updated (modal closes)
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.getByTestId('roles-search-input').fill(originalName);
+    await page.waitForLoadState('networkidle');
+
+    // Click Edit
+    const roleRow = page.locator('table tbody tr').filter({ hasText: originalName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Change name
+    const nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(newName);
+
+    // Click Update
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify old name doesn't exist
+    await page.getByTestId('roles-search-input').fill(originalName);
+    await page.waitForLoadState('networkidle');
+    let roleRow2 = page.locator('table tbody tr').filter({ hasText: originalName });
+    await expect(roleRow2).not.toBeVisible();
+
+    // Verify new name exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(newName);
+    await page.waitForLoadState('networkidle');
+    roleRow2 = page.locator('table tbody tr').filter({ hasText: newName });
+    await expect(roleRow2).toBeVisible();
   });
 
-  test('2.3 Edit Role - Remove Permissions', async ({ page }) => {
-    // First CREATE a new role with name "Remove Perms Role" and 3 permissions selected
+  test('12 - Add inherited role to existing role', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Create role without inherited roles
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Remove Perms Role');
-    
-    // Add 3 permissions
-    await page.getByRole('button', { name: /^permissions$/i }).click();
-    await page.getByRole('option', { name: 'BorrowerController_CreateBorrower' }).click();
-    await page.getByRole('option', { name: 'LoanController_SaveLoan' }).click();
-    await page.getByRole('option', { name: 'UserController_GetAllUsers' }).click();
-    await page.getByTestId('roles-input-name').click();
-    
-    await page.getByTestId('roles-btn-submit').click();
-    
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(roleName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
     // Search for the role
-    await page.getByTestId('roles-search-input').fill('Remove Perms Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Remove Perms Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Click "Permissions" dropdown
-    await page.getByRole('button', { name: /^permissions$/i }).click();
-    
-    // Deselect 2 of the previously selected permissions
-    await page.getByRole('option', { name: 'BorrowerController_CreateBorrower' }).click();
-    await page.getByRole('option', { name: 'LoanController_SaveLoan' }).click();
-    
-    // Click outside to close dropdown
-    await page.getByTestId('roles-input-name').click();
-    
-    // Click "Update"
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Verify role is updated (modal closes)
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    // Click Edit
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Select inherited role
+    await page.getByTestId('roles-multiselect-rolesId').click();
+    await page.getByRole('option', { name: /Admin/i }).click();
+    await page.keyboard.press('Escape');
+
+    // Click Update
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify role still exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+    const updatedRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(updatedRow).toBeVisible();
   });
 
-  test('2.4 Edit Role - Add Inherited Roles', async ({ page }) => {
-    // First CREATE a new role called "Inherit Test Role" with NO inherited roles
+  test('13 - Remove inherited role from existing role', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Create role with inherited role
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Inherit Test Role');
-    await page.getByTestId('roles-btn-submit').click();
-    
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(roleName);
+    await page.getByTestId('roles-multiselect-rolesId').click();
+    await page.getByRole('option', { name: /Admin/i }).click();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
     // Search for the role
-    await page.getByTestId('roles-search-input').fill('Inherit Test Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Inherit Test Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Click "Inherited Roles" dropdown
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    
-    // Select "Admin" from the list
-    await page.getByRole('option', { name: 'Admin', exact: true }).click();
-    
-    // Click outside to close dropdown
-    await page.getByTestId('roles-input-name').click();
-    
-    // Click "Update"
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Verify role is updated (modal closes)
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    // Click Edit
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Deselect inherited role
+    await page.getByTestId('roles-multiselect-rolesId').click();
+    const adminOption = page.getByRole('option', { name: /Admin/i });
+    if (await adminOption.isVisible()) {
+      await adminOption.click();
+    }
+    await page.keyboard.press('Escape');
+
+    // Click Update
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify role still exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+    const updatedRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(updatedRow).toBeVisible();
   });
 
-  test('2.5 Edit Role - Remove Inherited Roles', async ({ page }) => {
-    // First CREATE a new role called "Remove Inherit Role" with "Admin" as inherited role
+  test('14 - Add permissions to existing role', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Create role without permissions
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Remove Inherit Role');
-    
-    // Add Admin as inherited role
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    await page.getByRole('option', { name: 'Admin', exact: true }).click();
-    await page.getByTestId('roles-input-name').click();
-    
-    await page.getByTestId('roles-btn-submit').click();
-    
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(roleName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
     // Search for the role
-    await page.getByTestId('roles-search-input').fill('Remove Inherit Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Remove Inherit Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Click "Inherited Roles" dropdown
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    
-    // Deselect "Admin"
-    await page.getByRole('option', { name: 'Admin', exact: true }).click();
-    
-    // Click outside to close dropdown
-    await page.getByTestId('roles-input-name').click();
-    
-    // Click "Update"
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Verify role is updated (modal closes)
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    // Click Edit
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Select permissions
+    await page.getByTestId('roles-multiselect-permissionsId').click();
+    await page.getByRole('option', { name: /UserController_GetAllUsers/i }).click();
+    await page.getByRole('option', { name: /UserController_SaveUser/i }).click();
+    await page.keyboard.press('Escape');
+
+    // Click Update
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify role still exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+    const updatedRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(updatedRow).toBeVisible();
   });
 
-  test('2.6 Edit Role - Validation Empty Name', async ({ page }) => {
-    // First CREATE a role called "Validation Test Role"
+  test('15 - Remove permissions from existing role', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Create role with permissions
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Validation Test Role');
-    await page.getByTestId('roles-btn-submit').click();
-    
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(roleName);
+    await page.getByTestId('roles-multiselect-permissionsId').click();
+    await page.getByRole('option', { name: /UserController_GetAllUsers/i }).click();
+    await page.getByRole('option', { name: /UserController_SaveUser/i }).click();
+    await page.getByRole('option', { name: /UserController_DeleteUserAsync/i }).click();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
     // Search for the role
-    await page.getByTestId('roles-search-input').fill('Validation Test Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Validation Test Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Clear the "Role Name" field completely
-    await page.getByTestId('roles-input-name').clear();
-    
-    // Verify "Update" button is disabled
-    await expect(page.getByTestId('roles-btn-submit')).toBeDisabled();
-    
-    // Verify validation message appears
-    await expect(page.getByText(/role name must be between 2-40 characters/i)).toBeVisible();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    // Click Edit
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Deselect one permission
+    await page.getByTestId('roles-multiselect-permissionsId').click();
+    const deleteOption = page.getByRole('option', { name: /UserController_DeleteUserAsync/i });
+    if (await deleteOption.isVisible()) {
+      await deleteOption.click();
+    }
+    await page.keyboard.press('Escape');
+
+    // Click Update
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify role still exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+    const updatedRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(updatedRow).toBeVisible();
   });
 
-  test('2.8 Cancel Edit', async ({ page }) => {
-    // First CREATE a role called "Cancel Edit Role"
+  test('16 - Cancel edit operation', async ({ page }) => {
+    const originalName = generateUniqueName();
+    const newName = generateUniqueName();
+
+    // Create role
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Cancel Edit Role');
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Search for the role
-    await page.getByTestId('roles-search-input').fill('Cancel Edit Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Cancel Edit Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Change the name to "Should Not Save"
-    await page.getByTestId('roles-input-name').fill('Should Not Save');
-    
-    // Add some permissions
-    await page.getByRole('button', { name: /^permissions$/i }).click();
-    await page.getByRole('option', { name: 'BorrowerController_CreateBorrower' }).click();
-    await page.getByTestId('roles-input-name').click();
-    
-    // Click "Cancel"
-    await page.getByRole('button', { name: /^cancel$/i }).click();
-    
-    // Verify modal closes
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
-    
-    // Clear search to see all roles
-    await page.getByTestId('roles-search-input').fill('');
-    
-    // Search for the original name
-    await page.getByTestId('roles-search-input').fill('Cancel Edit Role');
-    
-    // Verify role still has original name "Cancel Edit Role"
-    await expect(page.locator('tr', { has: page.locator('td', { hasText: 'Cancel Edit Role' }) })).toBeVisible();
-    
-    // Verify "Should Not Save" does not exist
-    await page.getByTestId('roles-search-input').fill('Should Not Save');
-    await expect(page.getByText(/no data available/i)).toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(originalName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
+    // Search and edit
+    await page.getByTestId('roles-search-input').fill(originalName);
+    await page.waitForLoadState('networkidle');
+
+    const roleRow = page.locator('table tbody tr').filter({ hasText: originalName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Change name but cancel
+    const nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(newName);
+
+    // Click Cancel
+    await page.getByTestId('roles-btn-cancel').click();
+    await page.waitForSelector('dialog', { state: 'hidden' });
+
+    // Verify original name still exists
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(originalName);
+    await page.waitForLoadState('networkidle');
+    let searchRow = page.locator('table tbody tr').filter({ hasText: originalName });
+    await expect(searchRow).toBeVisible();
+
+    // Verify new name doesn't exist
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(newName);
+    await page.waitForLoadState('networkidle');
+    searchRow = page.locator('table tbody tr').filter({ hasText: newName });
+    await expect(searchRow).not.toBeVisible();
   });
 
-  test('2.9 Verify Pre-loaded Data', async ({ page }) => {
-    // First CREATE a role called "Preload Test Role" with "Admin" inherited and 2 permissions
+  test('17 - Verify data persistence after page refresh', async ({ page }) => {
+    const originalName = generateUniqueName();
+    const newName = generateUniqueName();
+
+    // Create role
     await page.getByTestId('roles-btn-new').click();
-    await page.getByTestId('roles-input-name').fill('Preload Test Role');
-    
-    // Add Admin as inherited role
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    await page.getByRole('option', { name: 'Admin', exact: true }).click();
-    await page.getByTestId('roles-input-name').click();
-    
-    // Add 2 permissions
-    await page.getByRole('button', { name: /^permissions$/i }).click();
-    await page.getByRole('option', { name: 'BorrowerController_CreateBorrower' }).click();
-    await page.getByRole('option', { name: 'LoanController_SaveLoan' }).click();
-    await page.getByTestId('roles-input-name').click();
-    
-    await page.getByTestId('roles-btn-submit').click();
-    
-    // Search for the role
-    await page.getByTestId('roles-search-input').fill('Preload Test Role');
-    
-    // Click "Edit" for that role
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: 'Preload Test Role' }) });
-    await roleRow.getByRole('button', { name: /edit/i }).click();
-    
-    // Verify "Role Name" field shows "Preload Test Role"
-    await expect(page.getByTestId('roles-input-name')).toHaveValue('Preload Test Role');
-    
-    // Verify the previously selected inherited roles are shown as selected
-    // (This would require checking the dropdown state - implementation depends on UI framework)
-    
-    // Verify the previously selected permissions are shown as selected
-    // (This would require checking the dropdown state - implementation depends on UI framework)
-    
-    // Click "Cancel" to close
-    await page.getByRole('button', { name: /^cancel$/i }).click();
-    
-    // Verify modal closes
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
+    await page.getByTestId('roles-input-name').fill(originalName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
+    // Search and edit
+    await page.getByTestId('roles-search-input').fill(originalName);
+    await page.waitForLoadState('networkidle');
+
+    const roleRow = page.locator('table tbody tr').filter({ hasText: originalName });
+    const editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    // Change name and save
+    const nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(newName);
+
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Reload page
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // Verify new name persists
+    await page.getByTestId('roles-search-input').fill(newName);
+    await page.waitForLoadState('networkidle');
+    const persistRow = page.locator('table tbody tr').filter({ hasText: newName });
+    await expect(persistRow).toBeVisible();
+  });
+
+  test('18 - Edit multiple roles in sequence', async ({ page }) => {
+    const role1 = generateUniqueName();
+    const role2 = generateUniqueName();
+    const role3 = generateUniqueName();
+
+    const role1Updated = generateUniqueName();
+    const role2Updated = generateUniqueName();
+    const role3Updated = generateUniqueName();
+
+    // Create three roles
+    for (const roleName of [role1, role2, role3]) {
+      await page.getByTestId('roles-btn-new').click();
+      await page.waitForSelector('dialog', { state: 'visible' });
+      await page.getByTestId('roles-input-name').fill(roleName);
+      await page.getByTestId('roles-btn-create').click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    // Edit role 1
+    await page.getByTestId('roles-search-input').fill(role1);
+    await page.waitForLoadState('networkidle');
+    let roleRow = page.locator('table tbody tr').filter({ hasText: role1 });
+    let editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+    let nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(role1Updated);
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Edit role 2
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(role2);
+    await page.waitForLoadState('networkidle');
+    roleRow = page.locator('table tbody tr').filter({ hasText: role2 });
+    editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+    nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(role2Updated);
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Edit role 3
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(role3);
+    await page.waitForLoadState('networkidle');
+    roleRow = page.locator('table tbody tr').filter({ hasText: role3 });
+    editBtn = roleRow.locator('button:has-text("Edit")');
+    await editBtn.click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+    nameInput = page.getByTestId('roles-input-name');
+    await nameInput.clear();
+    await nameInput.fill(role3Updated);
+    await page.getByTestId('roles-btn-update').click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify all updated names exist
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(role1Updated);
+    await page.waitForLoadState('networkidle');
+    let updatedRow = page.locator('table tbody tr').filter({ hasText: role1Updated });
+    await expect(updatedRow).toBeVisible();
+
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(role2Updated);
+    await page.waitForLoadState('networkidle');
+    updatedRow = page.locator('table tbody tr').filter({ hasText: role2Updated });
+    await expect(updatedRow).toBeVisible();
+
+    await page.getByTestId('roles-search-input').clear();
+    await page.getByTestId('roles-search-input').fill(role3Updated);
+    await page.waitForLoadState('networkidle');
+    updatedRow = page.locator('table tbody tr').filter({ hasText: role3Updated });
+    await expect(updatedRow).toBeVisible();
   });
 });

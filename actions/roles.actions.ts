@@ -1,351 +1,214 @@
-import { type Page, expect } from '@playwright/test';
-import { login } from './auth.actions';
+import { Page, expect } from '@playwright/test';
 
 /**
- * Reusable role management actions
- * These are higher-level flows that combine multiple interactions
+ * Common locators and actions for Roles module
  */
 
-export interface RoleData {
-  name: string;
-  inheritedRoles?: string[];
-  permissions?: string[];
-}
+// Common Test IDs
+export const roleTestIds = {
+  // Buttons
+  newRoleBtn: 'roles-btn-new',
+  cancelBtn: 'roles-btn-cancel',
+  createBtn: 'roles-btn-create',
+  updateBtn: 'roles-btn-update',
+  deleteBtn: 'roles-btn-delete',
+  deleteConfirmBtn: 'roles-btn-delete-confirm',
 
-export interface RoleIdCapture {
-  id: string;
-  name: string;
-}
+  // Inputs
+  roleNameInput: 'roles-input-name',
+  searchInput: 'roles-search-input',
+  inheritedRolesSelect: 'roles-multiselect-rolesId',
+  permissionsSelect: 'roles-multiselect-permissionsId',
+
+  // Table
+  table: 'roles-table',
+  selectAllCheckbox: 'roles-table-select-all',
+};
 
 /**
- * Navigate to roles page (with login)
+ * Navigate to roles page
  */
 export async function navigateToRoles(page: Page): Promise<void> {
-  await login(page);
   await page.goto('/roles');
   await page.waitForLoadState('networkidle');
 }
 
 /**
- * Create a new role and optionally capture its ID from network response
+ * Open the "New Role" modal
  */
-export async function createRole(
-  page: Page,
-  roleData: RoleData,
-  captureId: boolean = false
-): Promise<RoleIdCapture | null> {
-  let capturedRole: RoleIdCapture | null = null;
-
-  // Set up response listener if we need to capture ID
-  if (captureId) {
-    page.on('response', async (response) => {
-      if (response.url().includes('/api/user/save-role') && response.status() === 200) {
-        try {
-          const responseBody = await response.json();
-          if (responseBody && responseBody.id) {
-            capturedRole = {
-              id: responseBody.id,
-              name: roleData.name
-            };
-          }
-        } catch (e) {
-          // Ignore JSON parse errors
-        }
-      }
-    });
-  }
-
-  // Click New Role button
-  await page.getByRole('button', { name: /new role/i }).click();
-
-  // Wait for modal to be visible
-  await page.locator('[role="dialog"]').waitFor({ state: 'visible' });
-
-  // Fill role name
-  await page.getByLabel(/role name/i).fill(roleData.name);
-
-  // Select inherited roles if provided
-  if (roleData.inheritedRoles && roleData.inheritedRoles.length > 0) {
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    for (const roleName of roleData.inheritedRoles) {
-      await page.getByRole('option', { name: roleName }).click();
-    }
-    // Click outside to close dropdown
-    await page.getByLabel(/role name/i).click();
-  }
-
-  // Select permissions if provided
-  if (roleData.permissions && roleData.permissions.length > 0) {
-    await page.getByRole('button', { name: /permissions/i }).click();
-    for (const permission of roleData.permissions) {
-      await page.getByRole('option', { name: permission }).click();
-    }
-    // Click outside to close dropdown
-    await page.getByLabel(/role name/i).click();
-  }
-
-  // Submit the form
-  await page.getByRole('button', { name: /^create$/i }).click();
-
-  // Wait for modal to close
-  await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
-
-  // Wait a bit for the response to be captured
-  if (captureId) {
-    await page.waitForTimeout(500);
-  }
-
-  return capturedRole;
+export async function openNewRoleModal(page: Page): Promise<void> {
+  await page.getByTestId(roleTestIds.newRoleBtn).click();
+  await page.getByLabel(/New Role|Create Role/).waitFor({ state: 'visible' });
 }
 
 /**
- * Edit an existing role by clicking the edit button
+ * Fill role name input
  */
-export async function editRoleByButton(
-  page: Page,
-  roleName: string,
-  updates: Partial<RoleData>
-): Promise<void> {
-  // Find the role row and click edit
-  const roleRow = page.locator('tr', { has: page.locator('td', { hasText: roleName }) });
-  await roleRow.getByRole('button', { name: /edit/i }).click();
-
-  // Wait for modal
-  await page.locator('[role="dialog"]').waitFor({ state: 'visible' });
-
-  // Update name if provided
-  if (updates.name) {
-    await page.getByLabel(/role name/i).clear();
-    await page.getByLabel(/role name/i).fill(updates.name);
-  }
-
-  // Update inherited roles if provided
-  if (updates.inheritedRoles !== undefined) {
-    // This would need more complex logic to handle adding/removing
-    // For now, we'll just handle adding
-    if (updates.inheritedRoles.length > 0) {
-      await page.getByRole('button', { name: /inherited roles/i }).click();
-      for (const roleName of updates.inheritedRoles) {
-        await page.getByRole('option', { name: roleName }).click();
-      }
-      await page.getByLabel(/role name/i).click();
-    }
-  }
-
-  // Update permissions if provided
-  if (updates.permissions !== undefined && updates.permissions.length > 0) {
-    await page.getByRole('button', { name: /permissions/i }).click();
-    for (const permission of updates.permissions) {
-      await page.getByRole('option', { name: permission }).click();
-    }
-    await page.getByLabel(/role name/i).click();
-  }
-
-  // Submit the update
-  await page.getByRole('button', { name: /^update$/i }).click();
-
-  // Wait for modal to close
-  await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+export async function fillRoleName(page: Page, name: string): Promise<void> {
+  const input = page.getByTestId(roleTestIds.roleNameInput);
+  await input.clear();
+  await input.fill(name);
 }
 
 /**
- * Edit a role by ID (direct URL navigation)
+ * Get the current role name value from input
  */
-export async function editRoleById(
-  page: Page,
-  roleId: string,
-  updates: Partial<RoleData>
-): Promise<void> {
-  await page.goto(`/roles/${roleId}`);
-  await page.locator('[role="dialog"]').waitFor({ state: 'visible' });
-
-  // Same update logic as editRoleByButton
-  if (updates.name) {
-    await page.getByLabel(/role name/i).clear();
-    await page.getByLabel(/role name/i).fill(updates.name);
-  }
-
-  if (updates.inheritedRoles !== undefined && updates.inheritedRoles.length > 0) {
-    await page.getByRole('button', { name: /inherited roles/i }).click();
-    for (const roleName of updates.inheritedRoles) {
-      await page.getByRole('option', { name: roleName }).click();
-    }
-    await page.getByLabel(/role name/i).click();
-  }
-
-  if (updates.permissions !== undefined && updates.permissions.length > 0) {
-    await page.getByRole('button', { name: /permissions/i }).click();
-    for (const permission of updates.permissions) {
-      await page.getByRole('option', { name: permission }).click();
-    }
-    await page.getByLabel(/role name/i).click();
-  }
-
-  await page.getByRole('button', { name: /^update$/i }).click();
-  await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+export async function getRoleNameValue(page: Page): Promise<string> {
+  const input = page.getByTestId(roleTestIds.roleNameInput);
+  return input.inputValue();
 }
 
 /**
- * Delete a role by name
+ * Select inherited roles from dropdown
  */
-export async function deleteRole(page: Page, roleName: string): Promise<void> {
-  const roleRow = page.locator('tr', { has: page.locator('td', { hasText: roleName }) });
-  await roleRow.getByRole('button', { name: /delete/i }).click();
+export async function selectInheritedRoles(page: Page, roleNames: string[]): Promise<void> {
+  const dropdown = page.getByTestId(roleTestIds.inheritedRolesSelect);
+  await dropdown.click();
 
-  // Handle confirmation dialog if it exists
-  const confirmButton = page.getByRole('button', { name: /confirm|yes|delete/i });
-  if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await confirmButton.click();
-  }
-
-  // Wait for the role to be removed from the table
-  await expect(roleRow).not.toBeVisible({ timeout: 5000 });
-}
-
-/**
- * Search for roles
- */
-export async function searchRoles(page: Page, searchTerm: string): Promise<void> {
-  await page.getByPlaceholder(/search/i).fill(searchTerm);
-  // Wait for search to take effect
-  await page.waitForTimeout(500);
-}
-
-/**
- * Clear search
- */
-export async function clearSearch(page: Page): Promise<void> {
-  await page.getByPlaceholder(/search/i).clear();
-  await page.waitForTimeout(500);
-}
-
-/**
- * Select multiple roles using checkboxes
- */
-export async function selectRoles(page: Page, roleNames: string[]): Promise<void> {
   for (const roleName of roleNames) {
-    const roleRow = page.locator('tr', { has: page.locator('td', { hasText: roleName }) });
-    await roleRow.locator('input[type="checkbox"]').check();
-  }
-}
-
-/**
- * Select all visible roles
- */
-export async function selectAllRoles(page: Page): Promise<void> {
-  await page.locator('thead input[type="checkbox"]').check();
-}
-
-/**
- * Delete selected roles
- */
-export async function deleteSelectedRoles(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /delete selected/i }).click();
-
-  // Handle confirmation dialog
-  const confirmButton = page.getByRole('button', { name: /confirm|yes|delete/i });
-  if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await confirmButton.click();
+    const option = page.getByRole('option', { name: new RegExp(roleName, 'i') });
+    await option.click();
   }
 
-  await page.waitForTimeout(500);
+  // Close dropdown by clicking outside
+  await page.keyboard.press('Escape');
 }
 
 /**
- * Clear all selections
+ * Select permissions from dropdown
  */
-export async function clearAllSelections(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /clear all/i }).click();
+export async function selectPermissions(page: Page, permissionNames: string[]): Promise<void> {
+  const dropdown = page.getByTestId(roleTestIds.permissionsSelect);
+  await dropdown.click();
+
+  for (const permissionName of permissionNames) {
+    const option = page.getByRole('option', { name: new RegExp(permissionName, 'i') });
+    await option.click();
+  }
+
+  // Close dropdown
+  await page.keyboard.press('Escape');
 }
 
 /**
- * Sort by column
+ * Click Create button in modal
  */
-export async function sortBy(page: Page, columnName: 'Name' | 'ID'): Promise<void> {
-  await page.getByRole('button', { name: columnName }).click();
-  await page.waitForTimeout(300);
+export async function submitCreateRole(page: Page): Promise<void> {
+  const createBtn = page.getByTestId(roleTestIds.createBtn);
+  await createBtn.click();
+
+  // Wait for modal to close and table to update
+  await page.waitForLoadState('networkidle');
 }
 
 /**
- * Navigate to next page
+ * Click Update button in edit modal
  */
-export async function goToNextPage(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /next/i }).click();
-  await page.waitForTimeout(300);
+export async function submitUpdateRole(page: Page): Promise<void> {
+  const updateBtn = page.getByTestId(roleTestIds.updateBtn);
+  await updateBtn.click();
+
+  // Wait for update to complete
+  await page.waitForLoadState('networkidle');
 }
 
 /**
- * Navigate to previous page
+ * Click Cancel button in modal
  */
-export async function goToPreviousPage(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /previous/i }).click();
-  await page.waitForTimeout(300);
+export async function clickCancelModal(page: Page): Promise<void> {
+  const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+  await cancelBtn.click();
 }
 
 /**
- * Get role ID by intercepting network request
- * This should be called BEFORE the action that triggers the role creation/update
+ * Search for a role by name in the search box
  */
-export async function setupRoleIdCapture(page: Page): Promise<() => Promise<string | null>> {
-  let capturedId: string | null = null;
+export async function searchRoleByName(page: Page, name: string): Promise<void> {
+  const searchInput = page.getByTestId(roleTestIds.searchInput);
+  await searchInput.clear();
+  await searchInput.fill(name);
+  await page.waitForLoadState('networkidle');
+}
 
-  const responseHandler = async (response: any) => {
-    if (response.url().includes('/api/user/save-role') && response.status() === 200) {
-      try {
-        const responseBody = await response.json();
-        if (responseBody && responseBody.id) {
-          capturedId = responseBody.id;
-        }
-      } catch (e) {
-        // Ignore errors
-      }
+/**
+ * Find a role row by name in the table
+ */
+export async function findRoleRowByName(page: Page, name: string) {
+  const rows = page.locator('table tbody tr');
+  const count = await rows.count();
+
+  for (let i = 0; i < count; i++) {
+    const row = rows.nth(i);
+    const text = await row.textContent();
+    if (text && text.includes(name)) {
+      return row;
     }
-  };
+  }
 
-  page.on('response', responseHandler);
+  return null;
+}
 
-  // Return a function that retrieves the captured ID
-  return async () => {
-    // Wait a bit to ensure response was captured
-    await page.waitForTimeout(500);
-    page.off('response', responseHandler);
-    return capturedId;
-  };
+/**
+ * Get Edit button for a specific role by name
+ */
+export async function getEditButtonForRole(page: Page, roleName: string) {
+  const row = await findRoleRowByName(page, roleName);
+  if (!row) {
+    throw new Error(`Role "${roleName}" not found in table`);
+  }
+  return row.getByTestId(/roles-table-action-edit/);
+}
+
+/**
+ * Click Edit button for a specific role
+ */
+export async function editRoleByName(page: Page, roleName: string): Promise<void> {
+  const editBtn = await getEditButtonForRole(page, roleName);
+  await editBtn.click();
+
+  // Wait for modal to open
+  await page.getByLabel(/Edit Role/).waitFor({ state: 'visible' });
+}
+
+/**
+ * Get Delete button for a specific role
+ */
+export async function getDeleteButtonForRole(page: Page, roleName: string) {
+  const row = await findRoleRowByName(page, roleName);
+  if (!row) {
+    throw new Error(`Role "${roleName}" not found in table`);
+  }
+  return row.getByTestId(/roles-table-action-delete/);
 }
 
 /**
  * Verify role exists in table
  */
-export async function verifyRoleExists(page: Page, roleName: string): Promise<void> {
-  const roleRow = page.locator('tr', { has: page.locator('td', { hasText: roleName }) });
-  await expect(roleRow).toBeVisible();
+export async function verifyRoleExistsInTable(page: Page, roleName: string): Promise<void> {
+  const row = await findRoleRowByName(page, roleName);
+  expect(row).not.toBeNull();
 }
 
 /**
  * Verify role does not exist in table
  */
-export async function verifyRoleNotExists(page: Page, roleName: string): Promise<void> {
-  const roleRow = page.locator('tr', { has: page.locator('td', { hasText: roleName }) });
-  await expect(roleRow).not.toBeVisible();
+export async function verifyRoleNotInTable(page: Page, roleName: string): Promise<void> {
+  const row = await findRoleRowByName(page, roleName);
+  expect(row).toBeNull();
 }
 
 /**
- * Get the count of visible roles
+ * Get Create button and check if it's enabled
  */
-export async function getVisibleRoleCount(page: Page): Promise<number> {
-  const rows = page.locator('tbody tr');
-  return await rows.count();
+export async function isCreateButtonEnabled(page: Page): Promise<boolean> {
+  const createBtn = page.getByTestId(roleTestIds.createBtn);
+  return !(await createBtn.isDisabled());
 }
 
 /**
- * Verify pagination info text
+ * Get Update button and check if it's enabled
  */
-export async function verifyPaginationInfo(
-  page: Page,
-  start: number,
-  end: number,
-  total: number
-): Promise<void> {
-  const paginationText = `Showing ${start}-${end} of ${total}`;
-  await expect(page.getByText(paginationText)).toBeVisible();
+export async function isUpdateButtonEnabled(page: Page): Promise<boolean> {
+  const updateBtn = page.getByTestId(roleTestIds.updateBtn);
+  return !(await updateBtn.isDisabled());
 }

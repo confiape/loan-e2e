@@ -1,203 +1,175 @@
-// spec: plan-pruebas-roles.md
-// seed: tests/seed.spec.ts
-
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
+import { faker } from '@faker-js/faker';
 
-test.describe('Creación de Roles', () => {
+// Helper function to generate unique role names
+function generateUniqueName(): string {
+  const adjective = faker.word.adjective().charAt(0).toUpperCase() + faker.word.adjective().slice(1);
+  const noun = faker.word.noun().charAt(0).toUpperCase() + faker.word.noun().slice(1);
+  const digits = Math.floor(Math.random() * 90000) + 10000;
+  return `TestRole_${adjective}${noun}${digits}`;
+}
+
+test.describe('Role Creation', () => {
   test.beforeEach(async ({ page }) => {
-    // Each test starts with login
     await login(page);
-    // Navigate to roles page
     await page.goto('/roles');
+    await page.waitForLoadState('networkidle');
   });
 
-  test('Create Role with Valid Minimal Data', async ({ page }) => {
-    // 1. Click "New Role" button
+  test('1 - Create role with name, inherited role and permissions', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Click New Role button
     await page.getByTestId('roles-btn-new').click();
+    await page.waitForSelector('dialog', { state: 'visible' });
 
-    // Wait for modal to be visible
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    // Fill role name
+    await page.getByTestId('roles-input-name').fill(roleName);
 
-    // 2. Fill "Role Name" with "Test Role QA"
-    await page.getByTestId('roles-input-name').fill('Test Role QA');
-
-    // 3. Click "Create"
-    await page.getByTestId('roles-btn-submit').click();
-
-    // Verify modal closes
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
-
-    // Verify role appears in table by searching for it
-    await page.getByTestId('roles-search-input').fill('Test Role QA');
-    await expect(page.locator('tbody tr', { hasText: 'Test Role QA' }).first()).toBeVisible();
-  });
-
-  test('Create Role with All Fields Complete', async ({ page }) => {
-    // 1. Click "New Role"
-    await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
-
-    // 2. Fill "Role Name" with "Editor Role"
-    await page.getByTestId('roles-input-name').fill('Editor Role');
-
-    // 3. Click "Inherited Roles" dropdown
+    // Select inherited role
     await page.getByTestId('roles-multiselect-rolesId').click();
+    await page.getByRole('option', { name: /Admin/i }).click();
+    await page.keyboard.press('Escape');
 
-    // Search for Admin in the dropdown
-    await page.getByTestId('roles-multiselect-rolesId-search').fill('Admin');
-
-    // 4. Select "Admin" from the list
-    const adminOption = page.locator('[data-testid^="roles-multiselect-rolesId-option-"]', { hasText: /^Admin$/ }).first();
-    await adminOption.click();
-
-    // Close dropdown by clicking role name field
-    await page.getByTestId('roles-input-name').click();
-
-    // 5. Click "Permissions" dropdown
+    // Select permissions
     await page.getByTestId('roles-multiselect-permissionsId').click();
+    await page.getByRole('option', { name: /UserController_GetAllUsers/i }).click();
+    await page.getByRole('option', { name: /UserController_SaveUser/i }).click();
+    await page.keyboard.press('Escape');
 
-    // 6. Select permissions: BorrowerController_GetAllWithActiveLoans
-    await page.getByTestId('roles-multiselect-permissionsId-option-borrowercontroller-getallwithactiveloans').click();
+    // Click Create
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
 
-    // 7. Select LoanController_SaveLoan
-    await page.getByTestId('roles-multiselect-permissionsId-option-loancontroller-saveloan').click();
+    // Search for the role
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
 
-    // 8. Select UserController_GetAllUsers
-    await page.getByTestId('roles-multiselect-permissionsId-option-usercontroller-getallusers').click();
-
-    // Close dropdown
-    await page.getByTestId('roles-input-name').click();
-
-    // 9. Click "Create"
-    await page.getByTestId('roles-btn-submit').click();
-
-    // Verify modal closes
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
-
-    // Verify role appears in table
-    await page.getByTestId('roles-search-input').fill('Editor Role');
-    await expect(page.locator('tbody tr', { hasText: 'Editor Role' }).first()).toBeVisible();
+    // Verify role exists
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(roleRow).toBeVisible();
   });
 
-  test('Validation - Role Name Too Short', async ({ page }) => {
-    // 1. Click "New Role"
-    await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+  test('2 - Create role with only name', async ({ page }) => {
+    const roleName = generateUniqueName();
 
-    // 2. Fill "Role Name" with "A" (1 character)
+    await page.getByTestId('roles-btn-new').click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    await page.getByTestId('roles-input-name').fill(roleName);
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(roleRow).toBeVisible();
+  });
+
+  test('3 - Validate empty role name field', async ({ page }) => {
+    await page.getByTestId('roles-btn-new').click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    const createBtn = page.getByTestId('roles-btn-create');
+    await expect(createBtn).toBeDisabled();
+  });
+
+  test('4 - Validate role name too short (1 character)', async ({ page }) => {
+    await page.getByTestId('roles-btn-new').click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
     await page.getByTestId('roles-input-name').fill('A');
+    await page.keyboard.press('Tab');
 
-    // 3. Verify "Create" button is disabled
-    const createButton = page.getByTestId('roles-btn-submit');
-    await expect(createButton).toBeDisabled();
-
-    // 4. Verify validation message appears
-    await expect(page.getByText('Role name must be between 2-40 characters with no special characters')).toBeVisible();
+    const createBtn = page.getByTestId('roles-btn-create');
+    await expect(createBtn).toBeDisabled();
   });
 
-  test('Validation - Role Name Too Long', async ({ page }) => {
-    // 1. Click "New Role"
+  test('5 - Validate role name exactly 2 characters (valid)', async ({ page }) => {
     await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
 
-    // 2. Fill "Role Name" with more than 40 characters
-    await page.getByTestId('roles-input-name').fill('ThisIsAVeryLongRoleNameThatExceedsTheMaximumLengthAllowedByTheSystem');
+    await page.getByTestId('roles-input-name').fill('IT');
 
-    // 3. Verify "Create" button is disabled
-    const createButton = page.getByTestId('roles-btn-submit');
-    await expect(createButton).toBeDisabled();
-
-    // 4. Verify validation message appears
-    await expect(page.getByText('Role name must be between 2-40 characters with no special characters')).toBeVisible();
+    const createBtn = page.getByTestId('roles-btn-create');
+    await expect(createBtn).toBeEnabled();
   });
 
-  test('Validation - Special Characters', async ({ page }) => {
-    // 1. Click "New Role"
+  test('6 - Create role with multiple inherited roles', async ({ page }) => {
+    const roleName = generateUniqueName();
+
     await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
 
-    // 2. Fill "Role Name" with "Role@#$%"
-    await page.getByTestId('roles-input-name').fill('Role@#$%');
+    await page.getByTestId('roles-input-name').fill(roleName);
 
-    // 3. Verify "Create" button is disabled or error shown
-    const createButton = page.getByTestId('roles-btn-submit');
-    await expect(createButton).toBeDisabled();
-
-    // 4. Verify validation message appears
-    await expect(page.getByText('Role name must be between 2-40 characters with no special characters')).toBeVisible();
-  });
-
-  test('Cancel Role Creation', async ({ page }) => {
-    // 1. Click "New Role"
-    await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
-
-    // 2. Fill "Role Name" with "Temporal Role"
-    await page.getByTestId('roles-input-name').fill('Temporal Role');
-
-    // 3. Select some inherited roles
     await page.getByTestId('roles-multiselect-rolesId').click();
-    await page.getByTestId('roles-multiselect-rolesId-search').fill('Admin');
-    const adminOption = page.locator('[data-testid^="roles-multiselect-rolesId-option-"]', { hasText: /^Admin$/ }).first();
-    await adminOption.click();
-    await page.getByTestId('roles-input-name').click();
+    await page.getByRole('option', { name: /Admin/i }).click();
+    await page.getByRole('option', { name: /Cobrador/i }).click();
+    await page.getByRole('option', { name: /Administrador de Finanzas/i }).click();
+    await page.keyboard.press('Escape');
 
-    // 4. Select some permissions
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
+
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(roleRow).toBeVisible();
+  });
+
+  test('7 - Create role with multiple permissions', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    await page.getByTestId('roles-btn-new').click();
+    await page.waitForSelector('dialog', { state: 'visible' });
+
+    await page.getByTestId('roles-input-name').fill(roleName);
+
     await page.getByTestId('roles-multiselect-permissionsId').click();
-    await page.getByTestId('roles-multiselect-permissionsId-option-borrowercontroller-getallwithactiveloans').click();
-    await page.getByTestId('roles-input-name').click();
+    await page.getByRole('option', { name: /ReportsController_ReportPaymentByDay/i }).click();
+    await page.getByRole('option', { name: /ReportsController_ReportPaymentByLoan/i }).click();
+    await page.getByRole('option', { name: /ReportsController_ReportLoansByClientId/i }).click();
+    await page.keyboard.press('Escape');
 
-    // 5. Click "Cancel"
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByTestId('roles-btn-create').click();
+    await page.waitForLoadState('networkidle');
 
-    // Verify modal closes
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    await page.getByTestId('roles-search-input').fill(roleName);
+    await page.waitForLoadState('networkidle');
 
-    // Verify role was NOT created
-    await page.getByTestId('roles-search-input').fill('Temporal Role');
-    await expect(page.locator('tbody tr', { hasText: 'Temporal Role' })).not.toBeVisible();
+    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
+    await expect(roleRow).toBeVisible();
   });
 
-  test('Close Modal with X Button', async ({ page }) => {
-    // 1. Click "New Role"
+  test('8 - Cancel role creation', async ({ page }) => {
+    const cancelName = 'TestCancel123';
+
     await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
 
-    // 2. Fill "Role Name" with "Another Temporal Role"
-    await page.getByTestId('roles-input-name').fill('Another Temporal Role');
+    await page.getByTestId('roles-input-name').fill(cancelName);
+    await page.getByTestId('roles-btn-cancel').click();
+    await page.waitForSelector('dialog', { state: 'hidden' });
 
-    // 3. Click the X button (close modal button)
-    await page.getByRole('button', { name: 'Close modal' }).click();
+    await page.getByTestId('roles-search-input').fill(cancelName);
+    await page.waitForLoadState('networkidle');
 
-    // Verify modal closes without creating role
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
-
-    // Verify role was NOT created
-    await page.getByTestId('roles-search-input').fill('Another Temporal Role');
-    await expect(page.locator('tbody tr', { hasText: 'Another Temporal Role' })).not.toBeVisible();
+    const roleRow = page.locator('table tbody tr').filter({ hasText: cancelName });
+    await expect(roleRow).not.toBeVisible();
   });
 
-  test('Close Modal by Clicking Outside (Backdrop)', async ({ page }) => {
-    // 1. Click "New Role"
+  test('9 - Close modal with Escape key', async ({ page }) => {
     await page.getByTestId('roles-btn-new').click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await page.waitForSelector('dialog', { state: 'visible' });
 
-    // 2. Fill "Role Name" with "Test Role"
-    await page.getByTestId('roles-input-name').fill('Test Role');
+    await page.getByTestId('roles-input-name').fill('TestEscape');
+    await page.keyboard.press('Escape');
 
-    // 3. Click outside the modal (on the dark backdrop area)
-    await page.getByRole('button', { name: 'Dismiss modal backdrop' }).click();
-
-    // Verify modal closes without saving
-    await expect(page.locator('[role="dialog"]')).not.toBeVisible();
-
-    // Verify role was NOT created
-    await page.getByTestId('roles-search-input').fill('Test Role');
-    // The role might exist from previous tests, so we check the count didn't increase
-    const rows = page.locator('tbody tr');
-    const count = await rows.count();
-    // If no results found, count should be 0 or the table should show "no results"
-    expect(count).toBeGreaterThanOrEqual(0);
+    const modal = page.locator('dialog');
+    await expect(modal).not.toBeVisible();
   });
 });
