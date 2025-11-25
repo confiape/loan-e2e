@@ -80,11 +80,19 @@ test.describe("Role Creation", () => {
 
   test("6 - Create role with multiple inherited roles", async ({ page }) => {
     const roleName = generateUniqueName();
+    const roleName1 = generateUniqueName();
+    const roleName2 = generateUniqueName();
+    const roleName3 = generateUniqueName();
+
+    await createRole(page, { name: roleName1 });
+    await createRole(page, { name: roleName2 });
+    await createRole(page, { name: roleName3 });
+    
 
     // Click New Role button
     await createRole(page, {
       name: roleName,
-      inheritedRoles: ["Admin", "Cobrador", "Administrador de Finanzas"],
+      inheritedRoles: [roleName1, roleName2, roleName3],
       permissions: [],
     });
 
@@ -97,7 +105,7 @@ test.describe("Role Creation", () => {
     // Click New Role button
     await createRole(page, {
       name: roleName,
-      inheritedRoles: ["Admin", "Cobrador", "Administrador de Finanzas"],
+      inheritedRoles: [],
       permissions: ["ReportsController_ReportPaymentByDay", "ReportsController_ReportPaymentByLoan", "ReportsController_ReportLoansByClientId"],
     });
 

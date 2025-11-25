@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds, findRoleRowByName } from '../actions/roles.actions';
+import { roleTestIds, findRoleRowByName, createRole, openEditRolesByName, verifyPermissions, verifyInheritedRoles } from '../actions/roles.actions';
 
 test.describe('Role Data Integrity and Consistency', () => {
   test.beforeEach(async ({ page }) => {
@@ -155,65 +155,10 @@ test.describe('Role Data Integrity and Consistency', () => {
     const roleName = `PermConsist${Math.random().toString(36).substring(7)}`;
 
     // Create role with specific permissions
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Select permission
-    const permissionsDropdown = page.locator('button').filter({ 
-      has: page.locator('text=Select permissions') 
-    }).first();
-    
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      const label = page.locator('label').filter({ 
-        hasText: 'UserController_GetAllUsers' 
-      }).first();
-      
-      if (await label.isVisible()) {
-        await label.locator('input[type="checkbox"]').click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
-
-    // Create
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Edit and verify permission persists
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    const roleRow = await findRoleRowByName(page, roleName);
-    const editButton = roleRow.getByRole('button', { name: 'Edit' });
-    await editButton.click();
-    await page.waitForLoadState('networkidle');
+    await createRole(page, { name: roleName , permissions: ['UserController_GetAllUsers']});
 
     // Check permissions dropdown
-    const permDropdown = page.locator('button').filter({ 
-      has: page.locator('text=Select permissions') 
-    }).first();
-    
-    if (await permDropdown.isVisible()) {
-      await permDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      const userPermLabel = page.locator('label').filter({ 
-        hasText: 'UserController_GetAllUsers' 
-      }).first();
-      
-      if (await userPermLabel.isVisible()) {
-        const checkbox = userPermLabel.locator('input[type="checkbox"]');
-        const isChecked = await checkbox.isChecked();
-        expect(isChecked).toBeTruthy();
-      }
-
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
+    await verifyPermissions(page,roleName, ['UserController_GetAllUsers']);
 
     // Close
     await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
@@ -277,66 +222,18 @@ test.describe('Role Data Integrity and Consistency', () => {
     const newName = `FieldPreserveNew${Math.random().toString(36).substring(7)}`;
 
     // Create role with inherited role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Select inherited role
-    const inheritDropdown = page.locator('button').filter({ 
-      has: page.locator('text=Select inherited roles') 
-    }).first();
-    
-    if (await inheritDropdown.isVisible()) {
-      await inheritDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      const label = page.locator('label').filter({ hasText: 'Admin' }).first();
-      if (await label.isVisible()) {
-        await label.locator('input[type="checkbox"]').click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
-
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
+    await createRole(page, { name: roleName , inheritedRoles: ['Admin']   });
 
     // Edit only name
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
+    await openEditRolesByName(page, roleName);
+    await page.getByTestId(roleTestIds.roleNameInput).fill(newName);
+    await page.getByTestId(roleTestIds.submitBtn).click()
     await page.waitForLoadState('networkidle');
-
-    const roleRow = await findRoleRowByName(page, roleName);
-    const editButton = roleRow.getByRole('button', { name: 'Edit' });
-    await editButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Change name only
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.clear();
-    await nameInput.fill(newName);
-
-    // Verify inherited role is still selected
-    const inheritDropdownEdit = page.locator('button').filter({ 
-      has: page.locator('text=Select inherited roles') 
-    }).first();
-    
-    if (await inheritDropdownEdit.isVisible()) {
-      const text = await inheritDropdownEdit.textContent();
-      expect(text).toBeTruthy();
-    }
-
-    // Submit
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByTestId(roleTestIds.modal)).toBeHidden();
 
     // Verify new name exists and inherited role is preserved
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.getByTestId(roleTestIds.searchInput).fill(newName);
-    await page.waitForLoadState('networkidle');
-
-    const newRow = await findRoleRowByName(page, newName);
-    await expect(newRow).toBeVisible();
+    await page.reload();
+    await verifyInheritedRoles(page,newName, ['Admin']);
   });
 
   test('104 - Search filter preservation after operations', async ({ page }) => {
@@ -348,18 +245,13 @@ test.describe('Role Data Integrity and Consistency', () => {
     const countBefore = await rowsBefore.count();
 
     // Create a role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    const roleName = `NewAdmin${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
+    await createRole(page, { name: `NewAdmin${Math.random().toString(36).substring(7)}` });
 
     // Search should still be applied or reset - document behavior
     const rowsAfter = page.locator('table tbody tr');
     const countAfter = await rowsAfter.count();
 
     // Count may increase if new role matches search
-    expect(countAfter).toBeGreaterThanOrEqual(0);
+    expect(countAfter).toBeGreaterThanOrEqual(countBefore);
   });
 });
