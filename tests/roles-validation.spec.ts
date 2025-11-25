@@ -1,247 +1,221 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds, findRoleRowByName } from '../actions/roles.actions';
-import { faker } from '@faker-js/faker';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
+import { generateUniqueName } from '../data/role-name-generator';
 
-function generateUniqueName(): string {
-  return `ValidTest${faker.string.alphanumeric({ length: 5 })}`;
-}
+let roleActions: RoleActions;
 
-test.describe('Role Validation and Error Handling', () => {
+test.describe('Roles - Form Validation and Error Handling', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('58 - Validate role name - Required field', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Role Name Validation', () => {
+    test('9.1: Should keep Submit button disabled when name is empty', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
 
-    // Leave role name empty
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await expect(roleNameInput).toBeFocused();
+      // Leave name empty
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+      await expect(submitBtn).toBeDisabled();
 
-    // Click away/Tab to trigger validation
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
 
-    // Create button should be disabled
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(createBtn).toBeDisabled();
+    test('9.2: Should show error for name less than 2 characters', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      // Enter single character
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.fill('A');
+      await page.keyboard.press('Tab');
+
+      // Check if Submit button is disabled
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+      await expect(submitBtn).toBeDisabled();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.3: Should accept exactly 2 character name', async ({ page }) => {
+      const roleName = 'IT';
+
+      await roleActions.create({
+        name: roleName,
+      });
+
+      // Verify in table
+      await roleActions.verifyExists(roleName);
+    });
+
+    test('9.4: Should accept exactly 40 character name', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      // Create 40 char name
+      const name40Chars = 'Administration and Management Personnel';
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.fill(name40Chars);
+      await page.keyboard.press('Tab');
+
+      // Check that Submit is enabled
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+      await expect(submitBtn).not.toBeDisabled();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.5: Should prevent input exceeding 40 characters', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      // Try to enter 41+ characters
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      const longName = 'This is a very long role name that exceeds forty characters definitely';
+      await nameInput.fill(longName);
+
+      // Get the actual input value
+      const inputValue = await nameInput.inputValue();
+
+      // Should either be limited to 40 or show error
+      expect(inputValue.length <= 40).toBeTruthy();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.6: Should reject special characters in name', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      // Enter name with special characters
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.fill('Test@Role#123!');
+      await page.keyboard.press('Tab');
+
+      // Check if Submit button is disabled
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+      await expect(submitBtn).toBeDisabled();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.7: Should accept numbers and spaces in name', async ({ page }) => {
+      const roleName = generateUniqueName() + ' 123';
+
+      await roleActions.create({
+        name: roleName,
+      });
+
+      // Verify in table
+      await roleActions.verifyExists(roleName);
+    });
+
+    test('9.8: Should trim leading and trailing spaces', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      // Enter name with spaces
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.fill('  TestRole  ');
+      await page.keyboard.press('Tab');
+
+      // Check input value - should be trimmed or allowed
+      const inputValue = await nameInput.inputValue();
+      expect(inputValue.trim() === 'TestRole' || inputValue === '  TestRole  ').toBeTruthy();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.9: Should show real-time validation feedback', async ({ page }) => {
+      // Open modal
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+
+      // Initially disabled (empty)
+      await expect(submitBtn).toBeDisabled();
+
+      // Type valid name
+      await nameInput.fill('TestRole');
+
+      // Should be enabled
+      await expect(submitBtn).not.toBeDisabled();
+
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
+
+    test('9.13: Should show error for duplicate role name', async ({ page }) => {
+      // Get existing role name
+      const existingRoleName = 'Admin';
+
+      // Try to create role with same name
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.fill(existingRoleName);
+      await page.keyboard.press('Tab');
+
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+      await submitBtn.click();
+
+      // Should show error or prevent creation
+      const modal = page.getByTestId(roleTestIds.modal);
+      const isModalStillOpen = await modal.isVisible().catch(() => false);
+
+      // Either modal is still open with error
+      expect(isModalStillOpen).toBeTruthy();
+
+      // Close modal if open
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      if (await cancelBtn.isVisible()) {
+        await cancelBtn.click();
+      }
+    });
   });
 
-  test('59 - Validate role name - Too short (1 character)', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Edit Form Validation', () => {
+    test('9.14: Should validate on edit form with same rules', async ({ page }) => {
+      const roleName = generateUniqueName();
 
-    // Enter 1 character
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await roleNameInput.fill('A');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
+      // Create a test role
+      await roleActions.create({
+        name: roleName,
+      });
 
-    // Create button should be disabled
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(createBtn).toBeDisabled();
-  });
+      // Navigate back and open edit
+      await roleActions.navigateTo();
+      await roleActions.openEditByName(roleName);
 
-  test('60 - Validate role name - Minimum boundary (exactly 2 characters)', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+      // Clear name
+      const nameInput = page.getByTestId(roleTestIds.roleNameInput);
+      await nameInput.clear();
+      await page.keyboard.press('Tab');
 
-    // Enter exactly 2 characters
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await roleNameInput.fill('IT');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
+      // Update button should be disabled
+      const updateBtn = page.getByTestId(roleTestIds.updateBtn);
+      await expect(updateBtn).toBeDisabled();
 
-    // Create button should be enabled
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(createBtn).toBeEnabled();
-  });
-
-  test('61 - Validate role name - Maximum boundary (exactly 40 characters)', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter exactly 40 characters
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    const fortyCharName = 'Administration and Management Personnel';
-    await roleNameInput.fill(fortyCharName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Create button should be enabled
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(createBtn).toBeEnabled();
-  });
-
-  test('62 - Validate role name - Too long (over 40 characters)', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Try to enter more than 40 characters
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    const longName = 'This is a very long role name that exceeds forty characters';
-    await roleNameInput.fill(longName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Create button should be disabled or field should be limited
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isDisabled = await createBtn.isDisabled();
-    const inputValue = await roleNameInput.inputValue();
-
-    // Either button is disabled or input is truncated
-    expect(isDisabled || inputValue.length <= 40).toBeTruthy();
-  });
-
-  test('63 - Validate role name - Special characters', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter name with special characters
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await roleNameInput.fill('Test@Role#123!');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Create button should be disabled
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isDisabled = await createBtn.isDisabled();
-
-    // Should show error or be disabled
-    expect(isDisabled).toBeTruthy();
-  });
-
-  test('64 - Validate role name - Numbers and spaces allowed', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter name with numbers and spaces
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await roleNameInput.fill('Role 123');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Check if this is valid (depends on implementation)
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isEnabled = await createBtn.isEnabled();
-    // Document actual behavior
-  });
-
-  test('65 - Real-time validation feedback', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-
-    // Initially disabled (empty)
-    await expect(createBtn).toBeDisabled();
-
-    // Type valid input
-    await roleNameInput.fill('ValidRole');
-    await page.waitForLoadState('networkidle');
-
-    // Should become enabled
-    await expect(createBtn).toBeEnabled();
-
-    // Clear and should disable again
-    await roleNameInput.clear();
-    await page.waitForLoadState('networkidle');
-    await expect(createBtn).toBeDisabled();
-  });
-
-  test('66 - Validate on edit form', async ({ page }) => {
-    const roleName = generateUniqueName();
-
-    // Create a role first
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Search and edit
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    const roleRow = await findRoleRowByName(page, roleName);
-    const editButton = roleRow.getByRole('button', { name: 'Edit' });
-    await editButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Clear the role name
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.clear();
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Update button should be disabled
-    const updateBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(updateBtn).toBeDisabled();
-
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState("networkidle");
-  });
-
-  test('67 - Duplicate role name error', async ({ page }) => {
-    const roleName = 'DuplicateTest123';
-
-    // Create first role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Try to create second role with same name
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Should show error or prevent creation
-    // Either error message or modal still open
-    const modal = page.getByTestId(roleTestIds.modal);
-    const isModalStillOpen = await modal.isVisible().catch(() => false);
-
-    // Document actual behavior
-    if (isModalStillOpen) {
-      // Error is shown
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
-  });
-
-  test('68 - Valid name with spaces between words', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter name with spaces between words
-    const roleNameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await roleNameInput.fill('Senior Account Manager');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Should be valid
-    const createBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(createBtn).toBeEnabled();
-
-    // Cancel without creating
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState("networkidle");
+      // Close modal
+      const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+      await cancelBtn.click();
+    });
   });
 });

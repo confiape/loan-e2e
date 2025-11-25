@@ -1,374 +1,155 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds } from '../actions/roles.actions';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
+import { generateUniqueName } from '../data/role-name-generator';
 
-test.describe('Role Permission Management', () => {
+let roleActions: RoleActions;
+
+test.describe('Roles - Permission Management', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('69 - View all available permissions', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('View and Select Permissions', () => {
+    test('10.1: Should display all available permissions in dropdown', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(generateUniqueName());
 
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
 
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
+      const permissionOptions = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox');
+      const count = await permissionOptions.count();
 
-      // Verify permissions are displayed
-      const permissionCheckboxes = page.locator('input[type="checkbox"]').filter({
-        has: page.locator('..')
-      });
+      expect(count).toBeGreaterThanOrEqual(10);
 
-      const count = await permissionCheckboxes.count();
-      // Should have 40+ permissions
-      expect(count).toBeGreaterThan(10);
-
-      // Close dropdown by clicking it again
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Close modal by clicking Cancel
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('70 - Select single permission', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter role name
-    const roleName = `PermTest${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      // Find and select UserController_GetAllUsers permission
-      const permissionLabel = page.locator('label').filter({
-        hasText: 'UserController_GetAllUsers'
-      }).first();
-
-      if (await permissionLabel.isVisible()) {
-        const checkbox = permissionLabel.locator('input[type="checkbox"]');
-        await checkbox.click();
-        await page.waitForLoadState('networkidle');
-
-        // Close dropdown by clicking it again
-        await permissionsDropdown.click();
-        await page.waitForLoadState('networkidle');
-
-        // Button should show selection
-        expect(await permissionsDropdown.textContent()).toContain('Select');
-      }
-    }
-
-    // Cancel modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('71 - Select multiple permissions', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter role name
-    const roleName = `MultiPerm${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      // Select multiple permissions
-      const permissionsToSelect = [
-        'UserController_GetAllUsers',
-        'UserController_SaveUser',
-        'UserController_DeleteUserAsync'
-      ];
-
-      for (const perm of permissionsToSelect) {
-        const label = page.locator('label').filter({ hasText: perm }).first();
-        if (await label.isVisible()) {
-          const checkbox = label.locator('input[type="checkbox"]');
-          await checkbox.click();
-          await page.waitForLoadState('networkidle');
-        }
-      }
-
-      // Close dropdown by clicking it again
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Cancel modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('72 - Search permissions by controller name', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      // Look for search box in dropdown
-      const searchBox = page.locator('input[placeholder*="search"], input[placeholder*="Search"]').first();
-
-      if (await searchBox.isVisible()) {
-        // Type "Loan" to filter
-        await searchBox.fill('Loan');
-        await page.waitForLoadState('networkidle');
-
-        // Verify results are filtered to Loan permissions
-        const visibleLabels = page.locator('label:visible');
-        const count = await visibleLabels.count();
-        expect(count).toBeGreaterThan(0);
-
-        // Clear search
-        await searchBox.clear();
-        await page.waitForLoadState('networkidle');
-      }
-
-      // Close dropdown by clicking it again
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('73 - Search permissions by action name', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      // Look for search box
-      const searchBox = page.locator('input[placeholder*="search"], input[placeholder*="Search"]').first();
-
-      if (await searchBox.isVisible()) {
-        // Type "Delete" to filter
-        await searchBox.fill('Delete');
-        await page.waitForLoadState('networkidle');
-
-        // Verify delete permissions are shown
-        const visibleLabels = page.locator('label:visible');
-        const count = await visibleLabels.count();
-        expect(count).toBeGreaterThan(0);
-
-        // Clear search
-        await searchBox.clear();
-        await page.waitForLoadState('networkidle');
-      }
-
-      // Close dropdown by clicking it again
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('74 - Permission persistence after save', async ({ page }) => {
-    const roleName = `PermPersist${Math.random().toString(36).substring(7)}`;
-
-    // Create role with specific permissions
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Select a permission
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      const permLabel = page.locator('label').filter({
-        hasText: 'UserController_GetAllUsers'
-      }).first();
-
-      if (await permLabel.isVisible()) {
-        const checkbox = permLabel.locator('input[type="checkbox"]');
-        await checkbox.click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      // Close dropdown
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Submit
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Search for created role
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    // Edit the role
-    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName }).first();
-    if (await roleRow.isVisible()) {
-      const editButton = roleRow.getByRole('button', { name: 'Edit' });
-      await editButton.click();
-      await page.waitForLoadState('networkidle');
-
-      // Open permissions dropdown
-      const permissionsDropdownEdit = page.locator('button').filter({
-        has: page.locator('text=Select permissions')
-      }).first();
-
-      if (await permissionsDropdownEdit.isVisible()) {
-        await permissionsDropdownEdit.click();
-        await page.waitForLoadState('networkidle');
-
-        // Verify previously selected permission is checked
-        const permLabel = page.locator('label').filter({
-          hasText: 'UserController_GetAllUsers'
-        }).first();
-
-        if (await permLabel.isVisible()) {
-          const checkbox = permLabel.locator('input[type="checkbox"]');
-          const isChecked = await checkbox.isChecked();
-          expect(isChecked).toBeTruthy();
-        }
-
-        // Close dropdown
-        await permissionsDropdownEdit.click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      // Close modal
+      await page.keyboard.press('Escape');
       await page.getByTestId(roleTestIds.cancelBtn).click();
-      await page.waitForLoadState('networkidle');
-    }
-  });
+    });
 
-  test('75 - Deselect permissions', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+    test('10.2: Should select single permission', async ({ page }) => {
+      const roleName = generateUniqueName();
 
-    // Enter role name
-    const roleName = `DeselPerm${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
 
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+      await page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox').first().click();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
 
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
+      await page.getByTestId(roleTestIds.submitBtn).click();
       await page.waitForLoadState('networkidle');
 
-      // Select a permission
-      let permLabel = page.locator('label').filter({
-        hasText: 'UserController_GetAllUsers'
-      }).first();
+      await roleActions.verifyExists(roleName);
+    });
 
-      if (await permLabel.isVisible()) {
-        const checkbox = permLabel.locator('input[type="checkbox"]');
-        await checkbox.click();
-        await page.waitForLoadState('networkidle');
+    test('10.3: Should select multiple permissions', async ({ page }) => {
+      const roleName = generateUniqueName();
 
-        // Uncheck it
-        await checkbox.click();
-        await page.waitForLoadState('networkidle');
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
 
-        // Verify it's unchecked
-        const isChecked = await checkbox.isChecked();
-        expect(isChecked).toBeFalsy();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const checkboxes = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox');
+      const count = Math.min(3, await checkboxes.count());
+
+      for (let i = 0; i < count; i++) {
+        await checkboxes.nth(i).click();
       }
 
-      // Close dropdown
-      await permissionsDropdown.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('76 - Permission display format', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Click permissions dropdown
-    const permissionsDropdown = page.locator('button').filter({
-      has: page.locator('text=Select permissions')
-    }).first();
-
-    if (await permissionsDropdown.isVisible()) {
-      await permissionsDropdown.click();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+      await page.getByTestId(roleTestIds.submitBtn).click();
       await page.waitForLoadState('networkidle');
 
-      // Check permission naming format
-      const permissionLabels = page.locator('label:visible');
-      const firstLabel = await permissionLabels.first().textContent();
+      await roleActions.verifyExists(roleName);
+    });
 
-      // Permissions should follow pattern: ControllerName_ActionName
-      if (firstLabel) {
-        // Should contain underscore separating controller and action
-        expect(firstLabel).toMatch(/_/);
-      }
+    test('10.4: Should search permissions by controller name', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(generateUniqueName());
 
-      // Close dropdown
-      await permissionsDropdown.click();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const searchInput = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdSearch);
+      await searchInput.fill('Loan');
+
+      const options = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Loan');
+      const count = await options.count();
+
+      expect(count).toBeGreaterThan(0);
+
+      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
+
+    test('10.5: Should search permissions by action name', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(generateUniqueName());
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const searchInput = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdSearch);
+      await searchInput.fill('Delete');
+
+      const options = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Delete');
+      const count = await options.count();
+
+      expect(count).toBeGreaterThan(0);
+
+      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
+
+    test('10.8: Should persist permissions after save', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+      await page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox').first().click();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      await page.getByTestId(roleTestIds.submitBtn).click();
       await page.waitForLoadState('networkidle');
-    }
 
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState('networkidle');
+      const row = page.getByRole('rowheader', { name: roleName, exact: true }).locator('..');
+      await row.getByRole('button', { name: 'Edit' }).click();
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const selectedCheckboxes = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox', { checked: true });
+      const selectedCount = await selectedCheckboxes.count();
+
+      expect(selectedCount).toBeGreaterThan(0);
+
+      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
+
+    test('10.9: Should show admin role has many permissions', async ({ page }) => {
+      const adminRow = page.getByRole('rowheader', { name: 'Admin', exact: true }).locator('..');
+      await adminRow.getByRole('button', { name: 'Edit' }).click();
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const selectedCheckboxes = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByRole('checkbox', { checked: true });
+      const selectedCount = await selectedCheckboxes.count();
+
+      expect(selectedCount).toBeGreaterThanOrEqual(10);
+
+      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
   });
 });

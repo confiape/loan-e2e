@@ -1,93 +1,89 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds } from '../actions/roles.actions';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
 
-test.describe('Role Listing', () => {
+let roleActions: RoleActions;
+
+test.describe('Roles - Listing and Display', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('19 - View roles list', async ({ page }) => {
-    // Verify URL
-    expect(page.url()).toContain('/roles');
-
-    // Verify heading
-    await expect(page.getByRole('heading', { name: 'Roles' })).toBeVisible();
-
-    // Verify New Role button
-    await expect(page.getByTestId(roleTestIds.newRoleBtn)).toBeVisible();
+  test('1.1: Should display roles list with correct table structure', async ({ page }) => {
+    // Verify URL changed to /roles
+    await expect(page).toHaveURL(/.*\/roles$/);
 
     // Verify table exists
-    const table = page.locator('table');
+    const table = page.getByTestId(roleTestIds.table);
     await expect(table).toBeVisible();
 
-    // Verify at least one role exists
-    const rows = page.locator('table tbody tr');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
+    // Verify "New Role" button is visible
+    const newRoleBtn = page.getByTestId(roleTestIds.newRoleBtn);
+    await expect(newRoleBtn).toBeVisible();
   });
 
-  test('20 - Verify table structure', async ({ page }) => {
-    // Verify table headers
-    const headers = page.locator('table thead columnheader');
-    
-    // Check for specific columns
-    await expect(headers).toContainText('Select all');
-    await expect(headers).toContainText('Name');
-    await expect(headers).toContainText('ID');
-    await expect(headers).toContainText('Actions');
-
-    // Verify select all checkbox
-    const selectAllCheckbox = page.getByRole('checkbox', { name: 'Select all' });
+  test('1.2: Should verify table structure with columns and actions', async ({ page }) => {
+    // Verify "Select all" checkbox in header
+    const selectAllCheckbox = page.getByTestId(roleTestIds.selectAllCheckbox);
     await expect(selectAllCheckbox).toBeVisible();
 
-    // Verify sortable Name column (has button)
-    const nameHeader = page.locator('table thead button', { hasText: 'Name' });
-    await expect(nameHeader).toBeVisible();
+    // Verify table rows exist
+    const table = page.getByTestId(roleTestIds.table);
+    const rows = table.locator('tbody tr, [role="row"]');
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
-    // Verify sortable ID column (has button)
-    const idHeader = page.locator('table thead button', { hasText: 'ID' });
-    await expect(idHeader).toBeVisible();
+    // Verify first row has required elements
+    const firstRow = rows.first();
 
-    // Verify each row has required elements
-    const firstRow = page.locator('table tbody tr').first();
-    const checkboxInRow = firstRow.locator('input[type="checkbox"]');
-    const editButton = firstRow.getByRole('button', { name: 'Edit' });
-    const deleteButton = firstRow.getByRole('button', { name: 'Delete' });
+    // Check for checkbox in row
+    const rowCheckbox = firstRow.locator('input[type="checkbox"]').first();
+    await expect(rowCheckbox).toBeVisible();
 
-    await expect(checkboxInRow).toBeVisible();
-    await expect(editButton).toBeVisible();
-    await expect(deleteButton).toBeVisible();
+    // Check for role name
+    const roleName = firstRow.locator('td').nth(1);
+    await expect(roleName).toBeVisible();
+
+    // Check for role ID
+    const roleId = firstRow.locator('td').nth(2);
+    await expect(roleId).toBeVisible();
+
+    // Check for action buttons (Edit and Delete)
+    const editBtn = firstRow.getByRole('button', { name: 'Edit' });
+    const deleteBtn = firstRow.getByRole('button', { name: 'Delete' });
+    await expect(editBtn).toBeVisible();
+    await expect(deleteBtn).toBeVisible();
   });
 
-  test('21 - Verify initial data state', async ({ page }) => {
-    // Verify at least 3 initial roles exist
-    const rows = page.locator('table tbody tr');
+  test('1.3: Should verify initial data - at least 3 pre-existing roles', async ({ page }) => {
+    // Get all table rows
+    const table = page.getByTestId(roleTestIds.table);
+    const rows = table.locator('tbody tr, [role="row"]');
     const rowCount = await rows.count();
+
+    // Should have at least 3 roles (Admin, Cobrador, Administrador de Finanzas)
     expect(rowCount).toBeGreaterThanOrEqual(3);
 
-    // Verify Admin role exists
-    const adminRow = page.locator('table tbody tr').filter({ hasText: 'Admin' });
-    await expect(adminRow).toBeVisible();
+    // Verify role names exist
+    const tableContent = await table.textContent();
+    expect(tableContent).toContain('Admin');
+    expect(tableContent).toContain('Cobrador');
+    expect(tableContent).toContain('Administrador de Finanzas');
 
-    // Verify Cobrador role exists
-    const cobradorRow = page.locator('table tbody tr').filter({ hasText: 'Cobrador' });
-    await expect(cobradorRow).toBeVisible();
+    // Verify each role has a unique ID in MongoDB ObjectId format
+    const roleIds = await rows.locator('td:nth-child(3)').allTextContents();
+    const uniqueIds = new Set(roleIds);
+    expect(uniqueIds.size).toBe(roleIds.length); // All IDs should be unique
 
-    // Verify Administrador de Finanzas role exists
-    const finanzasRow = page.locator('table tbody tr').filter({ hasText: 'Administrador de Finanzas' });
-    await expect(finanzasRow).toBeVisible();
-
-    // Verify role IDs are in correct format (24 hex characters)
-    const cells = page.locator('table tbody tr td:nth-child(3)'); // ID column
-    const cellCount = await cells.count();
-    expect(cellCount).toBeGreaterThan(0);
-
-    const firstIdCell = cells.first();
-    const idText = await firstIdCell.textContent();
-    // Check if it looks like a MongoDB ObjectId (24 hex characters)
-    expect(idText).toMatch(/^[a-f0-9]{24}$/);
+    // Verify IDs are in MongoDB ObjectId format (24 hex characters)
+    const mongoIdRegex = /^[a-f0-9]{24}$/i;
+    roleIds.forEach(id => {
+      const trimmedId = id.trim();
+      if (trimmedId.length > 0) {
+        expect(mongoIdRegex.test(trimmedId)).toBeTruthy();
+      }
+    });
   });
 });

@@ -13,7 +13,7 @@ export const roleTestIds = {
 
   updateBtn: "roles-btn-update",
   deleteBtn: "roles-btn-delete",
-  deleteConfirmBtn: "roles-btn-delete-confirm",
+  deleteConfirmBtn: "roles-btn-confirm-delete",
 
   // Inputs
   roleNameInput: "roles-input-name",
@@ -24,7 +24,7 @@ export const roleTestIds = {
   rolesMultiselectRolesIdSearch: "roles-multiselect-rolesId-search",
   rolesMultiselectRolesIdList: "roles-multiselect-rolesId-list",
 
-  rolesMUltiselectPermissionsIdSearch: "roles-multiselect-permissionsId-search",
+  rolesMultiselectPermissionsIdSearch: "roles-multiselect-permissionsId-search",
   rolesMultiselectPermissionsIdList: "roles-multiselect-permissionsId-list",
 
   // Table
@@ -41,249 +41,282 @@ export interface RoleData {
   permissions?: string[];
 }
 
-export async function createRole(page: Page, roleData: RoleData): Promise<void> {
-  await page.goto("/roles");
-  await openNewRoleModal(page);
-  
-  // Fill role name
-  if( roleData.name ){
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleData.name);
+/**
+ * RoleActions class encapsulates all role-related UI interactions
+ */
+export class RoleActions {
+  constructor(private page: Page) {}
+
+  // ==================== Public Methods ====================
+
+  /**
+   * Navigate to the roles page
+   */
+  async navigateTo(): Promise<void> {
+    await this.page.goto("/roles");
+    await expect(this.page.getByTestId(roleTestIds.table)).toBeVisible();
   }
 
-  await selectInheritedRoles(page, roleData.inheritedRoles || []);
-  await selectPermissions(page, roleData.permissions || []);
-  
-  // Click Create
-  await page.getByTestId(roleTestIds.submitBtn).click();
-  await page.waitForLoadState('networkidle');
-}
-export async function editRole(page: Page, originalName: string, newRoleData:RoleData): Promise<void> {
+  /**
+   * Create a new role with the provided data
+   */
+  async create(roleData: RoleData): Promise<void> {
+    await this.navigateTo();
+    await this.openNewModal();
 
-  await openEditRolesByName(page, originalName);
+    if (roleData.name) {
+      await this.fillRoleName(roleData.name);
+    }
 
-  // Update role name if provided
-  if( newRoleData.name ){
-    await page.getByTestId(roleTestIds.roleNameInput).fill(newRoleData.name);
-  }
-  await selectInheritedRoles(page, newRoleData.inheritedRoles || []);
-  await selectPermissions(page, newRoleData.permissions || []);
-  await page.getByTestId(roleTestIds.submitBtn).click();
-  await page.waitForLoadState('networkidle');
-}
+    await this.selectInheritedRoles(roleData.inheritedRoles || []);
+    await this.selectPermissions(roleData.permissions || []);
 
-/**
- * Navigate to roles page
- */
-export async function navigateToRoles(page: Page): Promise<void> {
-  await page.goto("/roles");
-  await page.getByTestId(roleTestIds.table).isVisible();
-}
-
-/**
- * Open the "New Role" modal
- */
-export async function openNewRoleModal(page: Page): Promise<void> {
-  await page.getByTestId(roleTestIds.newRoleBtn).click();
-  await page.getByTestId(roleTestIds.modal).isVisible();
-}
-
-/**
- * Select inherited roles from dropdown
- */
-export async function selectInheritedRoles(
-  page: Page,
-  roleNames: string[]
-): Promise<void> {
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
-
-  for (const roleName of roleNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdSearch)
-      .fill(roleName);
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdList)
-      .getByText(roleName, {exact: true})
-      .click();
+    await this.submit();
   }
 
-  // Close dropdown by clicking outside
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
-}
+  /**
+   * Edit an existing role
+   */
+  async edit(originalName: string, newRoleData: RoleData): Promise<void> {
+    await this.navigateTo();
+    await this.openEditByName(originalName);
 
+    if (newRoleData.name) {
+      await this.fillRoleName(newRoleData.name);
+    }
 
-/**
- * Verify selected inherited roles 
- */
-export async function verifyInheritedRoles(
-  page: Page,
-  roleName: string,
-  roleNames: string[]
-): Promise<void> {
-  await openEditRolesByName(page, roleName);
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
+    await this.selectInheritedRoles(newRoleData.inheritedRoles || []);
+    await this.selectPermissions(newRoleData.permissions || []);
 
-  for (const roleName of roleNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdSearch)
-      .fill(roleName);
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdList)
-      .getByText(roleName, {exact: true})
-      .isChecked();
+    await this.submit();
   }
 
-  // Close dropdown by clicking outside
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
-}
-
-/**
- * Verify not selected inherited roles 
- */
-export async function verifyNotInheritedRoles(
-  page: Page,
-  roleName: string,
-  roleNames: string[]
-): Promise<void> {
-  await openEditRolesByName(page, roleName);
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
-
-  for (const roleName of roleNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdSearch)
-      .fill(roleName);
-    await expect(page
-      .getByTestId(roleTestIds.rolesMultiselectRolesIdList)
-      .getByText(roleName, {exact: true})).not.toBeChecked();
+  /**
+   * Delete a role by name
+   */
+  async delete(roleName: string): Promise<void> {
+    await this.navigateTo();
+    await this.clickDeleteByName(roleName);
   }
 
-  // Close dropdown by clicking outside
-  await page.getByTestId(roleTestIds.inheritedRolesSelect).click();
-}
-
-/**
- * Select permissions from dropdown
- */
-export async function selectPermissions(
-  page: Page,
-  permissionNames: string[]
-): Promise<void> {
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-
-  for (const permissionName of permissionNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMUltiselectPermissionsIdSearch)
-      .fill(permissionName);
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
-      .getByText(permissionName)
-      .click();
+  /**
+   * Verify that a role exists in the table
+   */
+  async verifyExists(roleName: string): Promise<void> {
+    await this.navigateTo();
+    const row = await this.findRowByName(roleName);
+    await expect(row).toBeVisible();
   }
 
-  // Close dropdown
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-}
-
-/**
- * Verify selected permissions from dropdown
- */
-export async function verifyPermissions(
-  page: Page,
-  roleName: string,
-  permissionNames: string[]
-): Promise<void> {
-  await openEditRolesByName(page, roleName);
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-
-  for (const permissionName of permissionNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMUltiselectPermissionsIdSearch)
-      .fill(permissionName);
-    await page
-      .getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
-      .getByText(permissionName)
-      .isChecked();
+  /**
+   * Verify that a role does not exist in the table
+   */
+  async verifyNotExists(roleName: string): Promise<void> {
+    const row = await this.findRowByName(roleName);
+    expect(await row?.count()).toBe(0);
   }
 
-  // Close dropdown
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-}
-
-/**
- * Verify not selected permissions from dropdown
- */
-export async function verifyNotPermissions(
-  page: Page,
-  roleName: string,
-  permissionNames: string[]
-): Promise<void> {
-  await openEditRolesByName(page, roleName);
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-
-  for (const permissionName of permissionNames) {
-    await page
-      .getByTestId(roleTestIds.rolesMUltiselectPermissionsIdSearch)
-      .fill(permissionName);
-    await expect(page
-      .getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
-      .getByText(permissionName)).not.toBeChecked();
+  /**
+   * Verify that specific inherited roles are selected
+   */
+  async verifyInheritedRolesSelected(
+    roleName: string,
+    roleNames: string[]
+  ): Promise<void> {
+    await this.openEditByName(roleName);
+    await this.verifyMultiselectOptions(
+      roleTestIds.inheritedRolesSelect,
+      roleTestIds.rolesMultiselectRolesIdSearch,
+      roleTestIds.rolesMultiselectRolesIdList,
+      roleNames,
+      true
+    );
   }
 
-  // Close dropdown
-  await page.getByTestId(roleTestIds.permissionsSelect).click();
-}
-/**
- * Find a role row by name in the table
- */
-export async function findRoleRowByName(
-  page: Page,
-  name: string
-): Promise<Locator>  {
-  await page.getByTestId(roleTestIds.searchInput).fill(name);
-  return page.getByRole("rowheader", { name: name ,exact: true}).locator("..");
-}
+  /**
+   * Verify that specific inherited roles are not selected
+   */
+  async verifyInheritedRolesNotSelected(
+    roleName: string,
+    roleNames: string[]
+  ): Promise<void> {
+    await this.openEditByName(roleName);
+    await this.verifyMultiselectOptions(
+      roleTestIds.inheritedRolesSelect,
+      roleTestIds.rolesMultiselectRolesIdSearch,
+      roleTestIds.rolesMultiselectRolesIdList,
+      roleNames,
+      false
+    );
+  }
 
-/**
- * Click Edit button for a specific role
- */
-export async function openEditRolesByName(page: Page, roleName: string) {
-  const row = await findRoleRowByName(page, roleName);
-  await row?.getByRole("button", { name: "Edit" }).click();
-}
+  /**
+   * Verify that specific permissions are selected
+   */
+  async verifyPermissionsSelected(
+    roleName: string,
+    permissionNames: string[]
+  ): Promise<void> {
+    await this.openEditByName(roleName);
+    await this.verifyMultiselectOptions(
+      roleTestIds.permissionsSelect,
+      roleTestIds.rolesMultiselectPermissionsIdSearch,
+      roleTestIds.rolesMultiselectPermissionsIdList,
+      permissionNames,
+      true
+    );
+  }
 
-/**
- * Get Delete button for a specific role
- */
-export async function getDeleteButtonForRole(page: Page, roleName: string) {
-  const row = await findRoleRowByName(page, roleName);
-  await row?.getByText("Delete").click();
-}
+  /**
+   * Verify that specific permissions are not selected
+   */
+  async verifyPermissionsNotSelected(
+    roleName: string,
+    permissionNames: string[]
+  ): Promise<void> {
+    await this.openEditByName(roleName);
+    await this.verifyMultiselectOptions(
+      roleTestIds.permissionsSelect,
+      roleTestIds.rolesMultiselectPermissionsIdSearch,
+      roleTestIds.rolesMultiselectPermissionsIdList,
+      permissionNames,
+      false
+    );
+  }
 
-/**
- * Verify role exists in table
- */
-export async function verifyRoleExistsInTable(
-  page: Page,
-  roleName: string
-): Promise<void> {
-  const row = await findRoleRowByName(page, roleName);
-  await row?.isVisible();
-}
+  /**
+   * Check if the submit button is enabled
+   */
+  async isSubmitButtonEnabled(): Promise<boolean> {
+    const btn = this.page.getByTestId(roleTestIds.submitBtn);
+    return !(await btn.isDisabled());
+  }
 
-/**
- * Verify role does not exist in table
- */
-export async function verifyRoleNotInTable(
-  page: Page,
-  roleName: string
-): Promise<void> {
-  const row = await findRoleRowByName(page, roleName);
-  expect(await row?.count()).toBe(0);
-}
+  // ==================== Private Methods ====================
 
-/**
- * Get Create button and check if it's enabled
- */
-export async function isSubmitButtonEnabled(page: Page): Promise<boolean> {
-  const createBtn = page.getByTestId(roleTestIds.submitBtn);
-  return !(await createBtn.isDisabled());
+  /**
+   * Open the "New Role" modal
+   */
+  private async openNewModal(): Promise<void> {
+    await this.page.getByTestId(roleTestIds.newRoleBtn).click();
+    await expect(this.page.getByTestId(roleTestIds.modal)).toBeVisible();
+  }
+
+  /**
+   * Open edit modal for a role by name
+   */
+  async openEditByName(roleName: string): Promise<void> {
+    const row = await this.findRowByName(roleName);
+    await row?.getByRole("button", { name: "Edit" }).click();
+  }
+
+  /**
+   * Click delete button for a role by name
+   */
+  async clickDeleteByName(roleName: string): Promise<void> {
+    const row = await this.findRowByName(roleName);
+    await row?.getByRole("button", { name: "Delete" }).click();
+  }
+
+  /**
+   * Find a role row by name in the table
+   */
+  async findRowByName(name: string): Promise<Locator> {
+    await this.page.getByTestId(roleTestIds.searchInput).fill(name);
+    return this.page.getByRole("rowheader", { name, exact: true }).locator("..");
+  }
+
+  /**
+   * Fill the role name input
+   */
+  private async fillRoleName(name: string): Promise<void> {
+    await this.page.getByTestId(roleTestIds.roleNameInput).fill(name);
+  }
+
+  /**
+   * Select inherited roles from the multiselect dropdown
+   */
+  private async selectInheritedRoles(roleNames: string[]): Promise<void> {
+    await this.selectMultiselectOptions(
+      roleTestIds.inheritedRolesSelect,
+      roleTestIds.rolesMultiselectRolesIdSearch,
+      roleTestIds.rolesMultiselectRolesIdList,
+      roleNames
+    );
+  }
+
+  /**
+   * Select permissions from the multiselect dropdown
+   */
+  private async selectPermissions(permissionNames: string[]): Promise<void> {
+    await this.selectMultiselectOptions(
+      roleTestIds.permissionsSelect,
+      roleTestIds.rolesMultiselectPermissionsIdSearch,
+      roleTestIds.rolesMultiselectPermissionsIdList,
+      permissionNames
+    );
+  }
+
+  /**
+   * Generic method to select options from a multiselect dropdown
+   */
+  private async selectMultiselectOptions(
+    selectorTestId: string,
+    searchTestId: string,
+    listTestId: string,
+    options: string[]
+  ): Promise<void> {
+    if (options.length === 0) return;
+
+    await this.page.getByTestId(selectorTestId).click();
+
+    for (const option of options) {
+      await this.page.getByTestId(searchTestId).clear();
+      await this.page.getByTestId(searchTestId).fill(option);
+      await this.page
+        .getByTestId(listTestId)
+        .getByText(option, { exact: true })
+        .click();
+    }
+
+    await this.page.getByTestId(selectorTestId).click();
+  }
+
+  /**
+   * Generic method to verify options in a multiselect dropdown
+   */
+  private async verifyMultiselectOptions(
+    selectorTestId: string,
+    searchTestId: string,
+    listTestId: string,
+    options: string[],
+    shouldBeChecked: boolean
+  ): Promise<void> {
+    await this.page.getByTestId(selectorTestId).click();
+
+    for (const option of options) {
+      await this.page.getByTestId(searchTestId).clear();
+      await this.page.getByTestId(searchTestId).fill(option);
+
+      const element = this.page
+        .getByTestId(listTestId)
+        .getByText(option, { exact: true });
+
+      if (shouldBeChecked) {
+        await expect(element).toBeChecked();
+      } else {
+        await expect(element).not.toBeChecked();
+      }
+    }
+
+    await this.page.getByTestId(selectorTestId).click();
+  }
+
+  /**
+   * Submit the form
+   */
+  private async submit(): Promise<void> {
+    await this.page.getByTestId(roleTestIds.submitBtn).click();
+    await this.page.waitForLoadState("networkidle");
+  }
 }

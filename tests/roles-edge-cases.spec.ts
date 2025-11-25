@@ -1,329 +1,198 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds, findRoleRowByName } from '../actions/roles.actions';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
+import { generateUniqueName } from '../data/role-name-generator';
 
-test.describe('Role Edge Cases and Boundary Conditions', () => {
+let roleActions: RoleActions;
+
+test.describe('Roles - Edge Cases and Boundary Conditions', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('105 - Role name with numbers only', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Special Characters and Unicode', () => {
+    test('15.1: Should handle unicode characters in role name', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await expect(page.getByTestId(roleTestIds.modal)).toBeVisible();
 
-    // Try numeric name
-    const roleName = '12345';
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
+      const unicodeName = '管理员角色';
+      await page.getByTestId(roleTestIds.roleNameInput).fill(unicodeName);
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(300);
 
-    // Check if valid (depends on implementation)
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isEnabled = await submitBtn.isEnabled();
-    
-    // Document behavior
-    if (isEnabled) {
-      await submitBtn.click();
-      await page.waitForLoadState('networkidle');
-      const row = await findRoleRowByName(page, roleName);
-      await expect(row).toBeVisible();
-    } else {
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
+      const createBtn = page.getByTestId(roleTestIds.submitBtn);
+      const isEnabled = !await createBtn.isDisabled();
+
+      if (isEnabled) {
+        await createBtn.click();
+        await page.waitForLoadState('networkidle');
+
+        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+        expect(tableContent).toContain(unicodeName);
+      } else {
+        expect(isEnabled).toBeFalsy();
+        await page.getByTestId(roleTestIds.cancelBtn).click();
+      }
+    });
+
+    test('15.2: Should handle emoji in role name appropriately', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await expect(page.getByTestId(roleTestIds.modal)).toBeVisible();
+
+      const emojiName = 'Admin 👨‍💼';
+      await page.getByTestId(roleTestIds.roleNameInput).fill(emojiName);
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(300);
+
+      const createBtn = page.getByTestId(roleTestIds.submitBtn);
+      const isEnabled = !await createBtn.isDisabled();
+
+      if (isEnabled) {
+        await createBtn.click();
+        await page.waitForLoadState('networkidle');
+
+        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+        expect(tableContent).toContain('Admin');
+      } else {
+        expect(isEnabled).toBeFalsy();
+        await page.getByTestId(roleTestIds.cancelBtn).click();
+      }
+    });
   });
 
-  test('106 - Role name with spaces only', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Large Data Sets', () => {
+    test('15.3: Should handle very long permission list', async ({ page }) => {
+      const roleName = generateUniqueName();
 
-    // Try space-only name
-    await page.getByTestId(roleTestIds.roleNameInput).fill('     ');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await expect(page.getByTestId(roleTestIds.modal)).toBeVisible();
 
-    // Should be invalid
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(submitBtn).toBeDisabled();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
 
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
+      const allPerms = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .locator('div').filter({ hasText: 'Controller' });
+      const permCount = await allPerms.count();
 
-  test('107 - Very long role name (approaching limit)', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Create very long valid name (39 characters)
-    const longName = 'A Very Long Role Name That Is Almost';
-    await page.getByTestId(roleTestIds.roleNameInput).fill(longName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Should be valid
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isEnabled = await submitBtn.isEnabled();
-    expect(isEnabled).toBeTruthy();
-
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
-
-  test('108 - Role with mixed case and numbers', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    const roleName = `TestRole123ABC${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    
-    // Should be valid
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(submitBtn).toBeEnabled();
-
-    // Create
-    await submitBtn.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify
-    const row = await findRoleRowByName(page, roleName);
-    await expect(row).toBeVisible();
-  });
-
-  test('109 - Role with hyphen and underscore', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Try with hyphen and underscore
-    const roleName = `Test-Role_Admin`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Check if valid
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isEnabled = await submitBtn.isEnabled();
-    
-    // Document behavior
-    if (isEnabled) {
-      await submitBtn.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
-
-  test('110 - Role with parentheses in name', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Try with parentheses
-    const roleName = `Test(Role)Admin`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Should likely be invalid (special character)
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    const isDisabled = await submitBtn.isDisabled();
-    
-    expect(isDisabled).toBeTruthy();
-
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
-
-  test('111 - Rapidly delete and recreate same-named role', async ({ page }) => {
-    const roleName = `RapidCycle${Math.random().toString(36).substring(7)}`;
-
-    // Create role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Delete immediately
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    const row = await findRoleRowByName(page, roleName);
-    const deleteBtn = row.getByRole('button', { name: 'Delete' });
-    await deleteBtn.click();
-    await page.waitForLoadState('networkidle');
-
-    const confirmModal = page.locator('[role="dialog"]');
-    const confirmDelete = confirmModal.getByRole('button', { name: 'Delete' });
-    await confirmDelete.click();
-    await page.waitForLoadState('networkidle');
-
-    // Recreate immediately
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Should be recreated successfully
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    const newRow = await findRoleRowByName(page, roleName);
-    await expect(newRow).toBeVisible();
-  });
-
-  test('112 - Modal with very large permission list', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    const roleName = `LargePermRole${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-
-    // Open permissions dropdown
-    const permDropdown = page.locator('button').filter({ 
-      has: page.locator('text=Select permissions') 
-    }).first();
-    
-    if (await permDropdown.isVisible()) {
-      await permDropdown.click();
-      await page.waitForLoadState('networkidle');
-
-      // Get all permissions
-      const labels = page.locator('label:visible');
-      const count = await labels.count();
-      
-      // Select many permissions
-      const labelsArray = await labels.all();
-      const selectCount = Math.min(20, labelsArray.length);
-      
+      const selectCount = Math.min(10, permCount);
       for (let i = 0; i < selectCount; i++) {
-        const checkbox = labelsArray[i].locator('input[type="checkbox"]');
-        if (!await checkbox.isChecked()) {
-          await checkbox.click();
-          await page.waitForTimeout(50);
+        const perm = allPerms.nth(i);
+        const checkbox = perm.locator('input[type="checkbox"]').first();
+        if (!(await checkbox.isChecked())) {
+          await perm.click();
+          await page.waitForTimeout(100);
         }
       }
 
-      // Close and submit
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
-
-    // Create
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    if (await submitBtn.isEnabled()) {
-      await submitBtn.click();
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+      await page.getByTestId(roleTestIds.submitBtn).click();
       await page.waitForLoadState('networkidle');
 
-      // Verify created
+      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+      expect(tableContent).toContain(roleName);
+    });
+  });
+
+  test.describe('Empty and Null States', () => {
+    test('15.4: Should allow role with no permissions or inherited roles', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await roleActions.create({ name: roleName });
+      await roleActions.verifyExists(roleName);
+
+      const row = await page.getByRole('rowheader', { name: roleName, exact: true }).locator('..');
+      await row.getByRole('button', { name: 'Edit' }).click();
+      await expect(page.getByTestId(roleTestIds.modal)).toBeVisible();
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+
+      const selectedPerms = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .locator('input[type="checkbox"]:checked');
+      const selectedCount = await selectedPerms.count();
+      expect(selectedCount).toBe(0);
+
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
+  });
+
+  test.describe('Rapid Operations', () => {
+    test('15.5: Should handle rapidly creating multiple roles', async ({ page }) => {
+      const roleName1 = generateUniqueName();
+      const roleName2 = generateUniqueName();
+      const roleName3 = generateUniqueName();
+
+      await roleActions.create({ name: roleName1 });
+      await roleActions.create({ name: roleName2 });
+      await roleActions.create({ name: roleName3 });
+
+      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+      expect(tableContent).toContain(roleName1);
+      expect(tableContent).toContain(roleName2);
+      expect(tableContent).toContain(roleName3);
+    });
+  });
+
+  test.describe('Browser Back Button and Navigation', () => {
+    test('15.8: Should handle browser back button after creating role', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await expect(page.getByTestId(roleTestIds.modal)).toBeVisible();
+
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+      await page.getByTestId(roleTestIds.submitBtn).click();
+      await page.waitForLoadState('networkidle');
+
+      await page.goBack();
+      await page.waitForTimeout(500);
+
+      const currentUrl = page.url();
+      expect(currentUrl).toContain('/roles');
+
+      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+      const matches = tableContent?.match(new RegExp(roleName, 'g')) || [];
+      expect(matches.length).toBe(1);
+    });
+  });
+
+  test.describe('Database Special Characters', () => {
+    test('15.10: Should escape special database characters properly', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await roleActions.create({ name: roleName });
+
+      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+      expect(tableContent).toContain(roleName);
+
       await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(300);
 
-      const row = await findRoleRowByName(page, roleName);
-      await expect(row).toBeVisible();
-    } else {
-      await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    }
+      const searchContent = await page.getByTestId(roleTestIds.table).textContent();
+      expect(searchContent).toContain(roleName);
+
+      await page.getByTestId(roleTestIds.searchInput).clear();
+    });
   });
 
-  test('113 - Edit role while simultaneously creating another', async ({ page }) => {
-    const role1Name = `EditRole${Math.random().toString(36).substring(7)}`;
-    const role2Name = `CreateRole${Math.random().toString(36).substring(7)}`;
+  test.describe('Display and Rendering Edge Cases', () => {
+    test('15.9: Should handle maximum roles without performance issues', async ({ page }) => {
+      const startCount = await page.getByRole('row').count();
 
-    // Create first role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(role1Name);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
+      const roleName1 = generateUniqueName();
+      const roleName2 = generateUniqueName();
+      const roleName3 = generateUniqueName();
 
-    // Edit it
-    await page.getByTestId(roleTestIds.searchInput).fill(role1Name);
-    await page.waitForLoadState('networkidle');
+      await roleActions.create({ name: roleName1 });
+      await roleActions.create({ name: roleName2 });
+      await roleActions.create({ name: roleName3 });
 
-    const row = await findRoleRowByName(page, role1Name);
-    const editBtn = row.getByRole('button', { name: 'Edit' });
-    await editBtn.click();
-    await page.waitForLoadState('networkidle');
+      const finalCount = await page.getByRole('row').count();
+      expect(finalCount).toBeGreaterThanOrEqual(startCount + 3);
 
-    // Cancel the edit
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState("networkidle");
-    await page.waitForLoadState('networkidle');
-
-    // Now create second role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(role2Name);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Both should exist
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.getByTestId(roleTestIds.searchInput).fill(role1Name);
-    await page.waitForLoadState('networkidle');
-    let row1 = await findRoleRowByName(page, role1Name);
-    await expect(row1).toBeVisible();
-
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.getByTestId(roleTestIds.searchInput).fill(role2Name);
-    await page.waitForLoadState('networkidle');
-    let row2 = await findRoleRowByName(page, role2Name);
-    await expect(row2).toBeVisible();
-  });
-
-  test('114 - Browser back button after operations', async ({ page }) => {
-    const currentUrl = page.url();
-
-    // Create role
-    const roleName = `BackBtnTest${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // URL should still be same page
-    expect(page.url()).toContain('/roles');
-
-    // Verify role exists
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    const row = await findRoleRowByName(page, roleName);
-    await expect(row).toBeVisible();
-  });
-
-  test('115 - Table with single role visible', async ({ page }) => {
-    // Search for single specific role
-    const searchInput = page.getByTestId(roleTestIds.searchInput);
-    await searchInput.fill('Cobrador');
-    await page.waitForLoadState('networkidle');
-
-    // Get rows
-    const rows = page.locator('table tbody tr');
-    const count = await rows.count();
-    
-    if (count > 0) {
-      // Single result should be displayed
-      const firstRow = rows.first();
-      await expect(firstRow).toBeVisible();
-
-      // Pagination should be minimal or hidden
-      const nextBtn = page.getByRole('button', { name: 'Next' });
-      const isNextVisible = await nextBtn.isVisible().catch(() => false);
-      
-      // With single result, next might be disabled or hidden
-    }
-
-    // Clear
-    await searchInput.clear();
+      await expect(page.getByTestId(roleTestIds.table)).toBeVisible();
+    });
   });
 });

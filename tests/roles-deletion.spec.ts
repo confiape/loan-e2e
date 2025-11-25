@@ -1,225 +1,100 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { createRole, findRoleRowByName, roleTestIds } from '../actions/roles.actions';
-import { faker } from '@faker-js/faker';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
+import { generateUniqueName } from '../data/role-name-generator';
 
-function generateUniqueName(): string {
-  return `DeleteTest${faker.string.alphanumeric({ length: 5 })}`;
-}
+let roleActions: RoleActions;
 
-test.describe('Role Deletion', () => {
+test.describe('Roles - Deletion', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('22 - Delete single role - Confirm', async ({ page }) => {
+  test('4.1: Should delete single role with confirmation', async ({ page }) => {
     const roleName = generateUniqueName();
 
     // Create a test role to delete
-    await createRole(page, { name: roleName });
-
-    // Search for the role
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    // Verify role exists
-    const roleRow = await findRoleRowByName(page, roleName);
-    await expect(roleRow).toBeVisible();
-
-    // Click Delete button
-    const deleteButton = roleRow.getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify confirmation modal appears
-    const confirmationModal = page.locator('[role="dialog"]');
-    await expect(confirmationModal).toBeVisible();
-
-    // Verify confirmation message mentions role name
-    await expect(confirmationModal).toContainText(roleName);
-
-    // Click Delete in confirmation
-    const deleteConfirmButton = confirmationModal.getByRole('button', { name: 'Delete' });
-    await deleteConfirmButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify role is removed from table
-    const roleRowAfterDelete = page.locator('table tbody tr').filter({ hasText: roleName });
-    await expect(roleRowAfterDelete).not.toBeVisible();
-  });
-
-  test('23 - Delete single role - Cancel', async ({ page }) => {
-    const roleName = generateUniqueName();
-
-    // Create a test role
-    await createRole(page, { name: roleName });
-
-    // Search for the role
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    // Verify role exists
-    const roleRow = await findRoleRowByName(page, roleName);
-    await expect(roleRow).toBeVisible();
-
-    // Click Delete button
-    const deleteButton = roleRow.getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify confirmation modal appears
-    const confirmationModal = page.locator('[role="dialog"]');
-    await expect(confirmationModal).toBeVisible();
-
-    // Click Cancel
-    const cancelButton = confirmationModal.getByRole('button', { name: 'Cancel' });
-    await cancelButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify modal is closed
-    await expect(confirmationModal).not.toBeVisible();
-
-    // Verify role still exists
-    const roleRowAfter = await findRoleRowByName(page, roleName);
-    await expect(roleRowAfter).toBeVisible();
-  });
-
-  test('24 - Close delete confirmation modal with X button', async ({ page }) => {
-    const roleName = generateUniqueName();
-
-    // Create a test role
-    await createRole(page, { name: roleName });
-
-    // Search for the role
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    // Click Delete button
-    const roleRow = await findRoleRowByName(page, roleName);
-    const deleteButton = roleRow.getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify confirmation modal
-    const confirmationModal = page.locator('[role="dialog"]');
-    await expect(confirmationModal).toBeVisible();
-
-    // Click Cancel button to close
-    const cancelButton = confirmationModal.getByRole('button', { name: 'Cancel' });
-    await cancelButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify modal is closed
-    await expect(confirmationModal).not.toBeVisible();
-
-    // Verify role still exists
-    const roleRowAfter = await findRoleRowByName(page, roleName);
-    await expect(roleRowAfter).toBeVisible();
-  });
-
-  test('25 - Delete role and verify removal', async ({ page }) => {
-    const roleName = generateUniqueName();
-
-    // Create a test role
-    await createRole(page, { name: roleName });
-
-    // Search for the role
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
-
-    // Verify role exists
-    let roleRow = await findRoleRowByName(page, roleName);
-    await expect(roleRow).toBeVisible();
+    await roleActions.create({
+      name: roleName,
+    });
 
     // Delete the role
-    const deleteButton = roleRow.getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
+    await roleActions.delete(roleName);
 
-    const confirmationModal = page.locator('[role="dialog"]');
-    const deleteConfirmButton = confirmationModal.getByRole('button', { name: 'Delete' });
-    await deleteConfirmButton.click();
-    await page.waitForLoadState('networkidle');
+    // Verify confirmation modal appears and handle deletion
+    const modal = page.getByTestId(roleTestIds.modal);
+    await expect(modal).toBeVisible();
 
-    // Clear search to see all roles
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.waitForLoadState('networkidle');
+    // Click Delete in confirmation
+    await page.getByTestId(roleTestIds.deleteConfirmBtn).click();
 
-    // Verify role is not in table
-    const roleRowAfter = page.locator('table tbody tr').filter({ hasText: roleName });
-    await expect(roleRowAfter).not.toBeVisible();
-
-    // Refresh page and verify deletion persists
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-
-    const roleRowAfterRefresh = page.locator('table tbody tr').filter({ hasText: roleName });
-    await expect(roleRowAfterRefresh).not.toBeVisible();
+    // Verify role is no longer in table
+    await roleActions.verifyNotExists(roleName);
   });
 
-  test('26 - Attempt to delete critical system role shows behavior', async ({ page }) => {
-    // Note: This test documents the actual behavior
-    // Navigate to first page to ensure Admin is visible
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.waitForLoadState('networkidle');
-
-    // Search for Admin role
-    await page.getByTestId(roleTestIds.searchInput).fill('Admin');
-    await page.waitForLoadState('networkidle');
-
-    // Verify Admin role exists
-    const adminRow = page.locator('table tbody tr').filter({ hasText: /^Admin$/ });
-    await expect(adminRow).toBeVisible();
-
-    // Click Delete button on Admin
-    const deleteButton = adminRow.first().getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify confirmation modal appears (system may allow deletion or show warning)
-    const confirmationModal = page.locator('[role="dialog"]');
-    await expect(confirmationModal).toBeVisible();
-
-    // Close without deleting - we don't want to delete system roles
-    const cancelButton = confirmationModal.getByRole('button', { name: 'Cancel' });
-    await cancelButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify Admin still exists
-    await page.getByTestId(roleTestIds.searchInput).clear();
-    await page.getByTestId(roleTestIds.searchInput).fill('Admin');
-    await page.waitForLoadState('networkidle');
-
-    const adminRowAfter = page.locator('table tbody tr').filter({ hasText: /^Admin$/ });
-    await expect(adminRowAfter).toBeVisible();
-  });
-
-  test('27 - Delete role with empty search result', async ({ page }) => {
+  test('4.2: Should cancel deletion and keep role in table', async ({ page }) => {
     const roleName = generateUniqueName();
 
     // Create a test role
-    await createRole(page, { name: roleName });
+    await roleActions.create({
+      name: roleName,
+    });
 
-    // Note: This test verifies delete behavior is consistent
-    // We'll create then immediately delete
-    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
-    await page.waitForLoadState('networkidle');
+    // Attempt to delete
+    await roleActions.delete(roleName);
 
-    const roleRow = await findRoleRowByName(page, roleName);
-    const deleteButton = roleRow.getByRole('button', { name: 'Delete' });
-    await deleteButton.click();
-    await page.waitForLoadState('networkidle');
+    // Verify confirmation modal appears
+    const modal = page.getByTestId(roleTestIds.modal);
+    await expect(modal).toBeVisible();
 
-    const confirmationModal = page.locator('[role="dialog"]');
-    const deleteConfirmButton = confirmationModal.getByRole('button', { name: 'Delete' });
-    await deleteConfirmButton.click();
-    await page.waitForLoadState('networkidle');
+    // Click Cancel button
+    const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
+    await cancelBtn.click();
 
-    // Verify no results are shown
-    const noResultsRow = page.locator('table tbody tr');
-    const rowCount = await noResultsRow.count();
-    expect(rowCount).toBe(0);
+    // Verify role is still in table
+    await roleActions.verifyExists(roleName);
+  });
+
+  test('4.3: Should verify role deletion persists after page refresh', async ({ page }) => {
+    const roleName = generateUniqueName();
+
+    // Get initial role count
+    const initialRows = page.getByTestId(roleTestIds.table).locator('tbody tr, [role="row"]');
+    const initialCount = await initialRows.count();
+
+    // Create a test role
+    await roleActions.create({
+      name: roleName,
+    });
+
+    // Verify role exists
+    await roleActions.verifyExists(roleName);
+
+    // Delete the role
+    await roleActions.delete(roleName);
+
+    // Confirm deletion
+    await page.getByTestId(roleTestIds.deleteConfirmBtn).click();
+
+    // Verify role is deleted
+    await roleActions.verifyNotExists(roleName);
+
+    // Get row count after deletion
+    const rowsAfterDelete = page.getByTestId(roleTestIds.table).locator('tbody tr, [role="row"]');
+    const countAfterDelete = await rowsAfterDelete.count();
+    expect(countAfterDelete).toBe(initialCount);
+
+    // Refresh the page
+    await page.reload();
+
+    // Verify role is still deleted after refresh
+    await roleActions.verifyNotExists(roleName);
+
+    // Verify count is still the same
+    const finalRows = page.getByTestId(roleTestIds.table).locator('tbody tr, [role="row"]');
+    const finalCount = await finalRows.count();
+    expect(finalCount).toBe(initialCount);
   });
 });

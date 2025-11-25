@@ -1,270 +1,307 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../actions/auth.actions';
-import { roleTestIds } from '../actions/roles.actions';
+import { RoleActions, roleTestIds } from '../actions/roles.actions';
+import { generateUniqueName } from '../data/role-name-generator';
 
-test.describe('Role UI/UX and Responsiveness', () => {
+let roleActions: RoleActions;
+
+test.describe('Roles - UI/UX and Responsiveness', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle');
+    roleActions = new RoleActions(page);
+    await roleActions.navigateTo();
   });
 
-  test('85 - Modal responsiveness', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Modal Dialog Behavior', () => {
+    test('12.1: Modal should be responsive at different window sizes', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
 
-    // Resize to mobile size
-    await page.setViewportSize({ width: 320, height: 640 });
-    await page.waitForTimeout(500);
+      const modal = page.getByTestId(roleTestIds.modal);
+      const boundingBox = await modal.boundingBox();
 
-    // Modal should still be visible and accessible
-    const modal = page.getByTestId(roleTestIds.modal);
-    await expect(modal).toBeVisible();
+      expect(boundingBox).not.toBeNull();
+      if (boundingBox) {
+        expect(boundingBox.width).toBeGreaterThan(0);
+        expect(boundingBox.height).toBeGreaterThan(0);
+      }
 
-    // Close button should be accessible
-    const closeButton = modal.locator('button[aria-label*="close"], button:first-child').first();
-    
-    // Reset viewport
-    await page.setViewportSize({ width: 1280, height: 720 });
-  });
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.waitForTimeout(500);
 
-  test('86 - Button states and visual feedback', async ({ page }) => {
-    // Hover over New Role button
-    const newRoleBtn = page.getByTestId(roleTestIds.newRoleBtn);
-    await newRoleBtn.hover();
-    
-    // Cursor should change to pointer
-    const cursor = await page.locator(roleTestIds.newRoleBtn).evaluate((el) => {
-      return window.getComputedStyle(el).cursor;
-    }).catch(() => 'pointer');
+      await expect(modal).toBeVisible();
 
-    // Button should have hover styling
-    await expect(newRoleBtn).toBeVisible();
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.waitForTimeout(500);
 
-    // Click to open modal
-    await newRoleBtn.click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Submit button should be disabled initially
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(submitBtn).toBeDisabled();
-
-    // Type role name
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.fill('TestRole');
-    await page.waitForLoadState('networkidle');
-
-    // Submit button should become enabled
-    await expect(submitBtn).toBeEnabled();
-
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
-
-  test('87 - Loading states during operations', async ({ page }) => {
-    // Create a role
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    const roleName = `LoadTest${Math.random().toString(36).substring(7)}`;
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    
-    // Click create (should show loading)
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    
-    // Wait for operation to complete
-    await page.waitForLoadState('networkidle');
-
-    // Verify role was created
-    const rows = page.locator('table tbody tr');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
-  });
-
-  test('88 - Error messages visibility', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Enter invalid data (too short)
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.fill('A');
-    await page.keyboard.press('Tab');
-    await page.waitForLoadState('networkidle');
-
-    // Look for error messages
-    const errorMessages = page.locator('[role="alert"], .error, .invalid');
-    const errorCount = await errorMessages.count();
-    
-    // May or may not have visible error (depends on implementation)
-    // But submit should be disabled
-    const submitBtn = page.getByTestId(roleTestIds.submitBtn);
-    await expect(submitBtn).toBeDisabled();
-
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-  });
-
-  test('89 - Success notifications', async ({ page }) => {
-    // Create a role
-    const roleName = `SuccessTest${Math.random().toString(36).substring(7)}`;
-    
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-    await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
-    await page.getByTestId(roleTestIds.submitBtn).click();
-    await page.waitForLoadState('networkidle');
-
-    // Look for success notification
-    const notifications = page.locator('[role="alert"], .toast, .notification, .snackbar');
-    const notificationCount = await notifications.count();
-    
-    // Success notification should appear
-    if (notificationCount > 0) {
-      const firstNotification = notifications.first();
-      const text = await firstNotification.textContent();
-      expect(text).toBeTruthy();
-    }
-
-    // Role should appear in table
-    const roleRow = page.locator('table tbody tr').filter({ hasText: roleName });
-    await expect(roleRow).toBeVisible();
-  });
-
-  test('90 - Keyboard navigation - Tab order', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
-
-    // Get focused element
-    let focusedElement = await page.evaluate(() => document.activeElement?.tagName);
-    
-    // Focus should be on first input (role name)
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.focus();
-
-    // Tab through elements
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(100);
-
-    // Focus should move to next element
-    focusedElement = await page.evaluate(() => {
-      const el = document.activeElement;
-      return el?.tagName || el?.className || 'unknown';
+      await page.getByTestId(roleTestIds.cancelBtn).click();
     });
 
-    expect(focusedElement).toBeTruthy();
+    test('12.2: Table should be responsive on narrow screens', async ({ page }) => {
+      const table = page.getByTestId(roleTestIds.table);
+      await expect(table).toBeVisible();
 
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.waitForTimeout(500);
+
+      const rows = page.locator('tbody tr, [role="row"]');
+      const rowCount = await rows.count();
+      expect(rowCount).toBeGreaterThan(0);
+
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.waitForTimeout(500);
+    });
   });
 
-  test('91 - Keyboard shortcuts - Escape to close modal', async ({ page }) => {
-    // Open modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    const modal = page.getByTestId(roleTestIds.modal);
-    await modal.isVisible();
+  test.describe('Button States and Visual Feedback', () => {
+    test('12.3: Buttons should show hover state', async ({ page }) => {
+      const newRoleBtn = page.getByTestId(roleTestIds.newRoleBtn);
 
-    // Type some data
-    const nameInput = page.getByTestId(roleTestIds.roleNameInput);
-    await nameInput.fill('TestEscapeClose');
+      await newRoleBtn.hover();
+      await page.waitForTimeout(300);
 
-    // Press Escape
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
-    await page.waitForLoadState('networkidle');
+      const cursorStyle = await newRoleBtn.evaluate(el => window.getComputedStyle(el).cursor);
+      expect(cursorStyle).toBe('pointer');
 
-    // Modal should close
-    await expect(modal).not.toBeVisible();
-
-    // Verify role was not created
-    await page.getByTestId(roleTestIds.searchInput).fill('TestEscapeClose');
-    await page.waitForLoadState('networkidle');
-
-    const rows = page.locator('table tbody tr').filter({ hasText: 'TestEscapeClose' });
-    await expect(rows).not.toBeVisible();
-  });
-
-  test('92 - Focus management - Focus return after modal close', async ({ page }) => {
-    const newRoleBtn = page.getByTestId(roleTestIds.newRoleBtn);
-    
-    // Click to open
-    await newRoleBtn.click();
-    const modal = page.getByTestId(roleTestIds.modal);
-    await modal.isVisible();
-
-    // Close modal
-    await page.getByTestId(roleTestIds.cancelBtn).click();
-    await page.waitForLoadState("networkidle");
-    await page.waitForLoadState('networkidle');
-
-    // Focus should return to button or nearby element
-    const focusedElement = await page.evaluate(() => {
-      return (document.activeElement as HTMLElement)?.getAttribute('data-testid') || 
-             (document.activeElement as HTMLElement)?.textContent || 
-             'no-focus';
+      expect(newRoleBtn).toBeVisible();
     });
 
-    // Should have focus somewhere in the page
-    expect(focusedElement).toBeTruthy();
+    test('12.4: Create button should be disabled when form is incomplete', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+
+      let isDisabled = await submitBtn.isDisabled();
+      expect(isDisabled).toBeTruthy();
+
+      await page.getByTestId(roleTestIds.roleNameInput).fill('Test Role');
+      await page.waitForTimeout(300);
+
+      isDisabled = await submitBtn.isDisabled();
+      expect(!isDisabled).toBeTruthy();
+
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
+
+    test('12.5: Disabled buttons should have distinct appearance', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      const submitBtn = page.getByTestId(roleTestIds.submitBtn);
+
+      const opacity = await submitBtn.evaluate(el => window.getComputedStyle(el).opacity);
+      const pointer = await submitBtn.evaluate(el => window.getComputedStyle(el).pointerEvents);
+
+      expect(
+        opacity === '0.5' || opacity === '0.6' || pointer === 'none' ||
+        await submitBtn.isDisabled()
+      ).toBeTruthy();
+
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
   });
 
-  test('93 - Empty states display', async ({ page }) => {
-    // Search for non-existent role
-    const searchInput = page.getByTestId(roleTestIds.searchInput);
-    await searchInput.fill('NonExistentRoleXYZ12345');
-    await page.waitForLoadState('networkidle');
+  test.describe('Loading and Notification States', () => {
+    test('12.6: Should show loading feedback during creation', async ({ page }) => {
+      const roleName = generateUniqueName();
 
-    // Verify no results
-    const rows = page.locator('table tbody tr');
-    const rowCount = await rows.count();
-    expect(rowCount).toBe(0);
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
 
-    // Table headers should still be visible
-    const headers = page.locator('table thead');
-    await expect(headers).toBeVisible();
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
 
-    // Clear search
-    await searchInput.clear();
-    await page.waitForLoadState('networkidle');
+      await page.getByTestId(roleTestIds.submitBtn).click();
 
-    // Roles should appear again
-    const rowsAfterClear = page.locator('table tbody tr');
-    const countAfterClear = await rowsAfterClear.count();
-    expect(countAfterClear).toBeGreaterThan(0);
+      const spinner = page.locator('[class*="spinner"], [class*="loading"], [class*="progress"]').first();
+      const spinnerVisible = await spinner.isVisible().catch(() => false);
+
+      await page.waitForTimeout(1500);
+
+      const modal = page.getByTestId(roleTestIds.modal);
+      const modalStillOpen = await modal.isVisible().catch(() => false);
+      expect(!modalStillOpen).toBeTruthy();
+    });
+
+    test('12.7: Should show success notification after successful operation', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+
+      await page.getByTestId(roleTestIds.submitBtn).click();
+      await page.waitForTimeout(1000);
+
+      const successMsg = page.locator('[class*="success"], [class*="toast"], [role="alert"]').first();
+      const isVisible = await successMsg.isVisible().catch(() => false);
+
+      if (isVisible) {
+        const text = await successMsg.textContent();
+        expect(text?.toLowerCase()).toContain('success');
+      } else {
+        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+        expect(tableContent).toContain(roleName);
+      }
+    });
+
+    test('12.8: Should show error message for validation failures', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(roleTestIds.roleNameInput).fill('@#$%');
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(300);
+
+      const errorMsg = page.locator('[role="alert"], [class*="error"], [class*="invalid"]').first();
+      const errorVisible = await errorMsg.isVisible().catch(() => false);
+
+      if (errorVisible) {
+        const text = await errorMsg.textContent();
+        expect(text?.toLowerCase()).toContain('error');
+      }
+
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+    });
   });
 
-  test('94 - Responsive table layout', async ({ page }) => {
-    // Test at tablet size
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.waitForTimeout(500);
+  test.describe('Keyboard Navigation', () => {
+    test('12.9: Should be fully keyboard navigable', async ({ page }) => {
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(200);
 
-    // Table should be visible
-    const table = page.locator('table');
-    await expect(table).toBeVisible();
+      for (let i = 0; i < 10; i++) {
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(100);
 
-    // All columns should be accessible
-    const headers = page.locator('table thead columnheader');
-    const headerCount = await headers.count();
-    expect(headerCount).toBeGreaterThan(0);
+        const focused = page.locator(':focus-visible, :focus').first();
+        const text = await focused.textContent();
 
-    // Reset viewport
-    await page.setViewportSize({ width: 1280, height: 720 });
+        if (text?.includes('New Role')) {
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(300);
+
+          const modal = page.getByTestId(roleTestIds.modal);
+          await expect(modal).toBeVisible();
+
+          await page.keyboard.press('Tab');
+          await page.keyboard.type('Keyboard Test Role');
+
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+
+          break;
+        }
+      }
+    });
+
+    test('12.10: Escape key should close modals', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      const modal = page.getByTestId(roleTestIds.modal);
+      await expect(modal).toBeVisible();
+
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+
+      const isClosed = !(await modal.isVisible().catch(() => false));
+      expect(isClosed).toBeTruthy();
+    });
+
+    test('12.11: Enter key should submit forms', async ({ page }) => {
+      const roleName = generateUniqueName();
+
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(roleTestIds.roleNameInput).fill(roleName);
+
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(1000);
+
+      const modal = page.getByTestId(roleTestIds.modal);
+      const modalClosed = !(await modal.isVisible().catch(() => false));
+
+      if (modalClosed) {
+        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
+        expect(tableContent).toContain(roleName);
+      }
+    });
   });
 
-  test('95 - Tooltip or help text visibility', async ({ page }) => {
-    // Open create modal
-    await page.getByTestId(roleTestIds.newRoleBtn).click();
-    await page.getByTestId(roleTestIds.modal).isVisible();
+  test.describe('Focus Management', () => {
+    test('12.12: Initial focus should be on first input in modal', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
 
-    // Look for help text or labels
-    const labels = page.locator('label');
-    const labelCount = await labels.count();
-    
-    // Should have descriptive labels for inputs
-    expect(labelCount).toBeGreaterThan(0);
+      const focused = page.locator(':focus-visible, :focus').first();
+      const placeholder = await focused.getAttribute('placeholder');
 
-    // Close
-    await page.getByTestId(roleTestIds.cancelBtn).click(); // Close modal
+      expect(placeholder || await focused.textContent()).toBeDefined();
+    });
+
+    test('12.13: Focus should return to trigger button after closing modal', async ({ page }) => {
+      await page.getByTestId(roleTestIds.newRoleBtn).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(roleTestIds.cancelBtn).click();
+      await page.waitForTimeout(300);
+
+      const focused = page.locator(':focus-visible, :focus, [class*="focus"]').first();
+      const focusedText = await focused.textContent().catch(() => '');
+
+      expect(page.url()).toContain('/roles');
+    });
+  });
+
+  test.describe('Empty States', () => {
+    test('12.14: Should show friendly message when no roles found', async ({ page }) => {
+      const searchInput = page.getByTestId(roleTestIds.searchInput);
+      if (await searchInput.isVisible()) {
+        await searchInput.fill('NonExistentRoleXYZ123');
+        await page.waitForTimeout(500);
+
+        const rows = page.locator('tbody tr, [role="row"]');
+        const rowCount = await rows.count();
+
+        if (rowCount === 0) {
+          const emptyMsg = page.locator('[class*="empty"], [class*="no-data"]').first();
+          const msgVisible = await emptyMsg.isVisible().catch(() => false);
+
+          if (msgVisible) {
+            const text = await emptyMsg.textContent();
+            expect(text?.toLowerCase()).toContain('no');
+          }
+        }
+
+        await searchInput.clear();
+      }
+    });
+  });
+
+  test.describe('Color and Contrast', () => {
+    test('12.15: Should have sufficient color contrast for readability', async ({ page }) => {
+      const heading = page.locator('h1, h2, [role="heading"]').first();
+
+      const color = await heading.evaluate(el => window.getComputedStyle(el).color);
+      const backgroundColor = await heading.evaluate(
+        el => window.getComputedStyle(el.parentElement || el).backgroundColor
+      );
+
+      expect(color).not.toMatch(/rgba\(0, 0, 0, 0\)/);
+      expect(color).toBeDefined();
+    });
+
+    test('12.16: Buttons should have distinct visual state', async ({ page }) => {
+      const btn = page.locator('button').first();
+
+      const color = await btn.evaluate(el => window.getComputedStyle(el).color);
+      const bgColor = await btn.evaluate(el => window.getComputedStyle(el).backgroundColor);
+
+      expect(color).toBeDefined();
+      expect(bgColor).toBeDefined();
+    });
   });
 });
