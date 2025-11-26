@@ -196,7 +196,7 @@ test.describe('Roles - Form Validation and Error Handling', () => {
 
       // Create a test role
       await roleActions.create({
-        name: roleName,fix
+        name: roleName,
       });
 
       // Navigate back and open edit
