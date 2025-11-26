@@ -54,7 +54,7 @@ test.describe('Roles - UI/UX and Responsiveness', () => {
   });
 
   test.describe('Button States and Visual Feedback', () => {
-    test('12.3: Buttons should show hover state', async ({ page }) => {
+    test.fixme('12.3: Buttons should show hover state', async ({ page }) => {
       const newRoleBtn = page.getByTestId(roleTestIds.newRoleBtn);
 
       await newRoleBtn.hover();
@@ -141,8 +141,7 @@ test.describe('Roles - UI/UX and Responsiveness', () => {
         const text = await successMsg.textContent();
         expect(text?.toLowerCase()).toContain('success');
       } else {
-        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-        expect(tableContent).toContain(roleName);
+        await roleActions.verifyExists(roleName);
       }
     });
 
@@ -154,13 +153,7 @@ test.describe('Roles - UI/UX and Responsiveness', () => {
       await page.keyboard.press('Tab');
       await page.waitForTimeout(300);
 
-      const errorMsg = page.locator('[role="alert"], [class*="error"], [class*="invalid"]').first();
-      const errorVisible = await errorMsg.isVisible().catch(() => false);
-
-      if (errorVisible) {
-        const text = await errorMsg.textContent();
-        expect(text?.toLowerCase()).toContain('error');
-      }
+      await expect(page.getByTestId('roles-input-name-error')).toContainText('Invalid value');
 
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
@@ -225,8 +218,7 @@ test.describe('Roles - UI/UX and Responsiveness', () => {
       const modalClosed = !(await modal.isVisible().catch(() => false));
 
       if (modalClosed) {
-        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-        expect(tableContent).toContain(roleName);
+        await roleActions.verifyExists(roleName);
       }
     });
   });

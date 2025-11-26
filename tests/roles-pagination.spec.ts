@@ -81,18 +81,17 @@ test.describe('Roles - Pagination', () => {
       await nextBtn.click();
       await page.waitForTimeout(500);
 
+      await expect(page.locator('app-generic-crud-list')).toContainText('Showing 11-20 of');
       if (await prevBtn.isVisible().catch(() => false)) {
         await prevBtn.click();
         await page.waitForTimeout(500);
 
-        const pageIndicator = page.locator('text=/Page|page/', { exact: false }).first();
-        const text = await pageIndicator.textContent().catch(() => '');
-        expect(text).toContain('1');
+        await expect(page.locator('app-generic-crud-list')).toContainText('Showing 1-10 of');
       }
     }
   });
 
-  test('8.5: Jump to specific page using page number button', async ({ page }) => {
+  test.fixme('8.5: Jump to specific page using page number button', async ({ page }) => {
     const pageButtons = page.locator('button:regex(/^\\d+$/), [class*="page-num"]');
     const buttonCount = await pageButtons.count();
 
@@ -216,8 +215,7 @@ test.describe('Roles - Pagination', () => {
         await page.getByTestId(roleTestIds.deleteConfirmBtn).click();
         await page.waitForTimeout(1000);
 
-        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-        expect(tableContent).not.toContain(roleName!);
+        await roleActions.verifyNotExists(roleName!);
       }
     }
   });

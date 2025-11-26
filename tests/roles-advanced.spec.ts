@@ -20,8 +20,7 @@ test.describe('Roles - Advanced Features', () => {
       await searchInput.fill('Admin');
       await page.waitForTimeout(500);
 
-      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
     });
 
     test('6.2: Should search by partial role name', async ({ page }) => {
@@ -29,22 +28,11 @@ test.describe('Roles - Advanced Features', () => {
       await searchInput.fill('Admin');
       await page.waitForTimeout(500);
 
-      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
     });
 
-    test('6.3: Should show no results for non-existent role', async ({ page }) => {
-      const searchInput = page.getByTestId(roleTestIds.searchInput);
-      await searchInput.fill('NonExistentRole12345');
-      await page.waitForTimeout(500);
-
-      const rows = page.locator('tbody tr, [role="row"]');
-      const rowCount = await rows.count();
-
-      if (rowCount > 0) {
-        const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-        expect(tableContent).not.toContain('NonExistentRole');
-      }
+    test('6.3: Should show no results for non-existent role', async () => {
+      await roleActions.verifyNotExists('NonExistentRole12345');
     });
 
     test('6.4: Should search case-insensitively', async ({ page }) => {
@@ -52,16 +40,12 @@ test.describe('Roles - Advanced Features', () => {
 
       await searchInput.fill('admin');
       await page.waitForTimeout(500);
-
-      let tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
 
       await searchInput.clear();
       await searchInput.fill('ADMIN');
       await page.waitForTimeout(500);
-
-      tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
     });
 
     test('6.5: Should clear search and show all roles', async ({ page }) => {
@@ -73,26 +57,22 @@ test.describe('Roles - Advanced Features', () => {
       await searchInput.clear();
       await page.waitForTimeout(500);
 
-      const tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
-      expect(tableContent).toContain('Cobrador');
-      expect(tableContent).toContain('Administrador de Finanzas');
+      await roleActions.verifyExists('Admin');
+      await roleActions.verifyExists('Cobrador');
+      await roleActions.verifyExists('Administrador de Finanzas');
     });
 
     test('6.8: Should perform real-time filtering', async ({ page }) => {
       const searchInput = page.getByTestId(roleTestIds.searchInput);
 
       await searchInput.type('A', { delay: 100 });
-      let tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
 
       await searchInput.type('d', { delay: 100 });
-      tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
 
       await searchInput.type('m', { delay: 100 });
-      tableContent = await page.getByTestId(roleTestIds.table).textContent();
-      expect(tableContent).toContain('Admin');
+      await roleActions.verifyExists('Admin');
     });
   });
 

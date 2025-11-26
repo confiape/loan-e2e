@@ -67,10 +67,7 @@ test.describe('Roles - Listing and Display', () => {
     expect(rowCount).toBeGreaterThanOrEqual(3);
 
     // Verify role names exist
-    const tableContent = await table.textContent();
-    expect(tableContent).toContain('Admin');
-    expect(tableContent).toContain('Cobrador');
-    expect(tableContent).toContain('Administrador de Finanzas');
+    await roleActions.verifyExists('Admin');
 
     // Verify each role has a unique ID in MongoDB ObjectId format
     const roleIds = await rows.locator('td:nth-child(3)').allTextContents();

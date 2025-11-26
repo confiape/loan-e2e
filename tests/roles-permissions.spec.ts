@@ -21,11 +21,12 @@ test.describe('Roles - Permission Management', () => {
 
       const permissionOptions = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
         .getByRole('checkbox');
+      await expect(permissionOptions.first()).toBeVisible();
       const count = await permissionOptions.count();
 
       expect(count).toBeGreaterThanOrEqual(10);
 
-      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
 
@@ -78,13 +79,17 @@ test.describe('Roles - Permission Management', () => {
       const searchInput = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdSearch);
       await searchInput.fill('Loan');
 
+      await expect(page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Loan')
+        .first()).toBeVisible();
+
       const options = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
         .getByText('Loan');
       const count = await options.count();
 
       expect(count).toBeGreaterThan(0);
 
-      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
 
@@ -96,14 +101,16 @@ test.describe('Roles - Permission Management', () => {
 
       const searchInput = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdSearch);
       await searchInput.fill('Delete');
-
+      await expect(page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Loan')
+        .first()).toBeVisible();
       const options = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
         .getByText('Delete');
       const count = await options.count();
 
       expect(count).toBeGreaterThan(0);
 
-      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
 
@@ -121,6 +128,7 @@ test.describe('Roles - Permission Management', () => {
       await page.getByTestId(roleTestIds.submitBtn).click();
       await page.waitForLoadState('networkidle');
 
+      await page.getByTestId(roleTestIds.searchInput).fill(roleName);
       const row = page.getByRole('rowheader', { name: roleName, exact: true }).locator('..');
       await row.getByRole('button', { name: 'Edit' }).click();
 
@@ -128,11 +136,15 @@ test.describe('Roles - Permission Management', () => {
 
       const selectedCheckboxes = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
         .getByRole('checkbox', { checked: true });
+      
+      await expect(page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Loan')
+        .first()).toBeVisible();
       const selectedCount = await selectedCheckboxes.count();
 
       expect(selectedCount).toBeGreaterThan(0);
 
-      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
 
@@ -141,6 +153,10 @@ test.describe('Roles - Permission Management', () => {
       await adminRow.getByRole('button', { name: 'Edit' }).click();
 
       await page.getByTestId(roleTestIds.permissionsSelect).click();
+      
+      await expect(page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
+        .getByText('Loan')
+        .first()).toBeVisible();
 
       const selectedCheckboxes = page.getByTestId(roleTestIds.rolesMultiselectPermissionsIdList)
         .getByRole('checkbox', { checked: true });
@@ -148,7 +164,7 @@ test.describe('Roles - Permission Management', () => {
 
       expect(selectedCount).toBeGreaterThanOrEqual(10);
 
-      await page.keyboard.press('Escape');
+      await page.getByTestId(roleTestIds.permissionsSelect).click();
       await page.getByTestId(roleTestIds.cancelBtn).click();
     });
   });

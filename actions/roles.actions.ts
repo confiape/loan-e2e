@@ -1,3 +1,4 @@
+import { ro } from "@faker-js/faker";
 import { Locator, Page, expect } from "@playwright/test";
 
 /**
@@ -14,6 +15,7 @@ export const roleTestIds = {
   updateBtn: "roles-btn-update",
   deleteBtn: "roles-btn-delete",
   deleteConfirmBtn: "roles-btn-confirm-delete",
+  deleteCancelBtn: "roles-btn-cancel-delete",
 
   // Inputs
   roleNameInput: "roles-input-name",
@@ -33,6 +35,7 @@ export const roleTestIds = {
 
   // Modal
   modal: "roles-modal",
+  rolesDeleteModal: "roles-delete-modal"
 };
 
 export interface RoleData {
@@ -112,8 +115,8 @@ export class RoleActions {
    * Verify that a role does not exist in the table
    */
   async verifyNotExists(roleName: string): Promise<void> {
-    const row = await this.findRowByName(roleName);
-    expect(await row?.count()).toBe(0);
+    await this.findRowByName(roleName);
+    await expect(this.page.getByRole('cell')).toContainText('No data available');
   }
 
   /**
@@ -221,9 +224,9 @@ export class RoleActions {
   /**
    * Find a role row by name in the table
    */
-  async findRowByName(name: string): Promise<Locator> {
+  async  findRowByName(name: string): Promise<Locator> {
     await this.page.getByTestId(roleTestIds.searchInput).fill(name);
-    return this.page.getByRole("rowheader", { name, exact: true }).locator("..");
+    return this.page.getByRole("rowheader", { name: name ,exact: true}).locator("..");
   }
 
   /**

@@ -19,12 +19,12 @@ test.describe('Roles - Deletion', () => {
     await roleActions.create({
       name: roleName,
     });
-
+    await roleActions.verifyExists(roleName);
     // Delete the role
     await roleActions.delete(roleName);
 
     // Verify confirmation modal appears and handle deletion
-    const modal = page.getByTestId(roleTestIds.modal);
+    const modal = page.getByTestId(roleTestIds.rolesDeleteModal);
     await expect(modal).toBeVisible();
 
     // Click Delete in confirmation
@@ -46,12 +46,11 @@ test.describe('Roles - Deletion', () => {
     await roleActions.delete(roleName);
 
     // Verify confirmation modal appears
-    const modal = page.getByTestId(roleTestIds.modal);
+    const modal = page.getByTestId(roleTestIds.rolesDeleteModal);
     await expect(modal).toBeVisible();
 
     // Click Cancel button
-    const cancelBtn = page.getByTestId(roleTestIds.cancelBtn);
-    await cancelBtn.click();
+    await page.getByTestId(roleTestIds.deleteCancelBtn).click();
 
     // Verify role is still in table
     await roleActions.verifyExists(roleName);
@@ -61,6 +60,7 @@ test.describe('Roles - Deletion', () => {
     const roleName = generateUniqueName();
 
     // Get initial role count
+    await page.getByTestId(roleTestIds.searchInput).fill(roleName);
     const initialRows = page.getByTestId(roleTestIds.table).locator('tbody tr, [role="row"]');
     const initialCount = await initialRows.count();
 

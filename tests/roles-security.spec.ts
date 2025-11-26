@@ -176,6 +176,9 @@ test.describe('Roles - Security and Permissions Testing', () => {
       expect(tableContent).toContain('Admin');
       expect(tableContent).not.toContain('password');
       expect(tableContent).not.toContain('secret');
+
+      // Verify Admin role exists
+      await roleActions.verifyExists('Admin');
     });
   });
 
