@@ -183,7 +183,7 @@ test.describe('Companies - Creation', () => {
     });
 
     test('2.11: Should cancel company creation', async ({ page }) => {
-      const countBefore = await companyActions.getTableRowCount();
+      const countBefore = await companyActions.getTableRowCount("Admin");
 
       await page.getByTestId(companyTestIds.newCompanyBtn).click();
       await expect(page.getByTestId(companyTestIds.modal)).toBeVisible();
@@ -199,12 +199,12 @@ test.describe('Companies - Creation', () => {
       await expect(page.getByTestId(companyTestIds.modal)).not.toBeVisible();
 
       // Verify count didn't change
-      const countAfter = await companyActions.getTableRowCount();
+      const countAfter = await companyActions.getTableRowCount("Admin");
       expect(countAfter).toBe(countBefore);
     });
 
     test('2.12: Should close modal when clicking X button', async ({ page }) => {
-      const countBefore = await companyActions.getTableRowCount();
+      const countBefore = await companyActions.getTableRowCount("Admin");
 
       await page.getByTestId(companyTestIds.newCompanyBtn).click();
       await expect(page.getByTestId(companyTestIds.modal)).toBeVisible();
@@ -220,7 +220,7 @@ test.describe('Companies - Creation', () => {
       await expect(page.getByTestId(companyTestIds.modal)).not.toBeVisible();
 
       // Verify count didn't change
-      const countAfter = await companyActions.getTableRowCount();
+      const countAfter = await companyActions.getTableRowCount("Admin");
       expect(countAfter).toBe(countBefore);
     });
   });

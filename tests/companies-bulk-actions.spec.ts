@@ -185,12 +185,12 @@ test.describe("Companies - Bulk Selection and Actions", () => {
   test.describe("Bulk Delete", () => {
     test("7.7: Should delete multiple selected companies", async ({ page }) => {
       const company1 = generateUniqueName();
-      const company2 = generateUniqueName();
+      const company2 = company1+"v1";
 
       await companyActions.create({ name: company1 });
       await companyActions.create({ name: company2 });
 
-      const countBefore = await companyActions.getTableRowCount();
+      const countBefore =  await companyActions.getTableRowCount(company1);
 
       await companyActions.selectCompany(company1);
       await companyActions.selectCompany(company2);
@@ -205,7 +205,7 @@ test.describe("Companies - Bulk Selection and Actions", () => {
         await page.getByTestId(companyTestIds.deleteConfirmBtn).click();
 
         // Verify count decreased
-        const countAfter = await companyActions.getTableRowCount();
+        const countAfter = await companyActions.getTableRowCount(company1);
         expect(countAfter).toBeLessThan(countBefore);
 
         // Verify companies are gone

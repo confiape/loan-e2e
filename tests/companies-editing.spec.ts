@@ -68,7 +68,7 @@ test.describe('Companies - Editing', () => {
 
     test('3.4: Should update company to maximum valid length', async ({ page }) => {
       const originalName = generateUniqueName();
-      const maxLengthName = 'Global Enterprise Management Solutions Co';
+      const maxLengthName = 'Global Enterprise Management Solutions C';
       expect(maxLengthName.length).toBe(40);
 
       await companyActions.create({ name: originalName });
@@ -90,7 +90,7 @@ test.describe('Companies - Editing', () => {
       await page.waitForTimeout(300);
 
       // Verify button is disabled
-      const updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      const updateBtn = page.getByTestId(companyTestIds.submitBtn);
       await expect(updateBtn).toBeDisabled();
     });
 
@@ -106,7 +106,7 @@ test.describe('Companies - Editing', () => {
       await page.waitForTimeout(300);
 
       // Verify button is disabled or error is shown
-      const updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      const updateBtn = page.getByTestId(companyTestIds.submitBtn);
       const isDisabled = await updateBtn.isDisabled();
       expect(isDisabled).toBeTruthy();
     });
@@ -123,7 +123,7 @@ test.describe('Companies - Editing', () => {
       await page.waitForTimeout(300);
 
       // Verify button is disabled
-      const updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      const updateBtn = page.getByTestId(companyTestIds.submitBtn);
       await expect(updateBtn).toBeDisabled();
     });
   });
@@ -201,21 +201,21 @@ test.describe('Companies - Editing', () => {
       await page.getByTestId(companyTestIds.companyNameInput).fill('');
       await page.keyboard.press('Tab');
       await page.waitForTimeout(300);
-      let updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      let updateBtn = page.getByTestId(companyTestIds.submitBtn);
       await expect(updateBtn).toBeDisabled();
 
       // Test too short
       await page.getByTestId(companyTestIds.companyNameInput).fill('A');
       await page.keyboard.press('Tab');
       await page.waitForTimeout(300);
-      updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      updateBtn = page.getByTestId(companyTestIds.submitBtn);
       await expect(updateBtn).toBeDisabled();
 
       // Test too long
       await page.getByTestId(companyTestIds.companyNameInput).fill('A'.repeat(41));
       await page.keyboard.press('Tab');
       await page.waitForTimeout(300);
-      updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      updateBtn = page.getByTestId(companyTestIds.submitBtn);
       const isDisabled = await updateBtn.isDisabled();
       expect(isDisabled).toBeTruthy();
 
@@ -223,7 +223,7 @@ test.describe('Companies - Editing', () => {
       await page.getByTestId(companyTestIds.companyNameInput).fill('Test@Company');
       await page.keyboard.press('Tab');
       await page.waitForTimeout(300);
-      updateBtn = page.getByTestId(companyTestIds.updateBtn);
+      updateBtn = page.getByTestId(companyTestIds.submitBtn);
       const hasSpecialCharError = await updateBtn.isDisabled();
       expect(hasSpecialCharError).toBeTruthy();
     });

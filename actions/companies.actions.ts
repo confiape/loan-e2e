@@ -32,7 +32,8 @@ export const companyTestIds = {
   deleteModal: "companies-delete-modal",
 
   // Other
-  selectedItemsArea: "companies-table-selected-item"
+  selectedItemsArea: "companies-table-selected-item",
+  pagination: "companies-table-pagination"
 };
 
 export interface CompanyData {
@@ -145,8 +146,8 @@ export class CompanyActions {
   /**
    * Get table row count (excluding header)
    */
-  async getTableRowCount(prfixName: string): Promise<number> {
-    await this.search(prfixName);
+  async getTableRowCount(prefixName: string): Promise<number> {
+    await this.search(prefixName);
     const rows = await this.page.getByTestId('companies-table-body-row').count();
     return rows
   }

@@ -17,10 +17,9 @@ test.describe('Companies - Performance and Load', () => {
       // Create multiple companies
       const companyCount = 10; // Using 10 instead of 100+ to keep test fast
       const companies: string[] = [];
-
+      const name = generateUniqueName();
       for (let i = 0; i < companyCount; i++) {
-        const name = generateUniqueName();
-        companies.push(name);
+        companies.push(name+i);
         await companyActions.create({ name });
       }
 
@@ -33,12 +32,12 @@ test.describe('Companies - Performance and Load', () => {
       expect(loadTime).toBeLessThan(10000); // 10 seconds max
 
       // Table should still be responsive
-      const rowCount = await companyActions.getTableRowCount();
+      const rowCount = await companyActions.getTableRowCount(name);
       expect(rowCount).toBeGreaterThanOrEqual(companyCount);
 
       // Search should work efficiently
       await companyActions.search(companies[0].substring(0, 5));
-      const filteredRowCount = await companyActions.getTableRowCount();
+      const filteredRowCount = await companyActions.getTableRowCount(name);
       expect(filteredRowCount).toBeGreaterThanOrEqual(0);
     });
 
@@ -52,15 +51,9 @@ test.describe('Companies - Performance and Load', () => {
       await companyActions.navigateTo();
 
       // Check for pagination
-      const pagination = page.locator('[class*="pagination"], text=/page|next|previous/i');
-      const hasPagination = await pagination.count() > 0;
+        await expect(page.getByTestId(companyTestIds.pagination).getByText('Items per page:')).toBeVisible();
 
-      // Or check for virtual scrolling
-      const table = page.getByTestId(companyTestIds.table);
-      const isScrollable = await table.evaluate((el) => el.scrollHeight > el.clientHeight);
-
-      // Should have either pagination or scrolling
-      expect(hasPagination || isScrollable).toBeTruthy();
+        // Or check for virtual scrolling
     });
   });
 

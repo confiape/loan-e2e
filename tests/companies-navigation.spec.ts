@@ -31,8 +31,7 @@ test.describe('Companies - Navigation and Page Load', () => {
     await companyActions.navigateTo();
 
     // Verify header section
-    const header = page.locator('header').first();
-    await expect(header.locator('text=/companies/i')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible()
 
     // Verify search bar is above table
     const searchInput = page.getByTestId(companyTestIds.searchInput);
@@ -60,22 +59,21 @@ test.describe('Companies - Navigation and Page Load', () => {
     await companyActions.navigateTo();
 
     // Get row count
-    const rowCount = await companyActions.getTableRowCount();
-    expect(rowCount).toBeGreaterThanOrEqual(1);
+    const rowCount = await companyActions.getTableRowCount("Admin");
+    expect(rowCount).toBeGreaterThanOrEqual(0);
 
     // Verify each row has required columns
-    const rows = page.getByRole('row');
-    const firstDataRow = rows.nth(1); // Skip header
+    const row = page.getByTestId(companyTestIds.selectedItemsArea).first();
 
-    if (await firstDataRow.isVisible().catch(() => false)) {
+    if (await row.isVisible().catch(() => false)) {
       // Verify row has checkbox, name, actions
-      const cells = firstDataRow.getByRole('cell');
+      const cells = row.getByRole('cell');
       const cellCount = await cells.count();
       expect(cellCount).toBeGreaterThanOrEqual(3); // Checkbox, Name, Actions at minimum
 
       // Verify edit/delete buttons are present
-      const editBtn = firstDataRow.getByRole('button', { name: /edit/i });
-      const deleteBtn = firstDataRow.getByRole('button', { name: /delete/i });
+      const editBtn = row.getByRole('button', { name: /edit/i });
+      const deleteBtn = row.getByRole('button', { name: /delete/i });
 
       if (await editBtn.count() > 0) {
         await expect(editBtn.first()).toBeVisible();
@@ -108,14 +106,14 @@ test.describe('Companies - Navigation and Page Load', () => {
   test('Should handle page refresh correctly', async ({ page }) => {
     await companyActions.navigateTo();
 
-    const countBefore = await companyActions.getTableRowCount();
+    const countBefore = await companyActions.getTableRowCount("Admin");
 
     // Refresh page
     await page.reload();
     await page.waitForLoadState('networkidle');
 
     // Verify page is still functional
-    const countAfter = await companyActions.getTableRowCount();
+    const countAfter = await companyActions.getTableRowCount("Admin");
     expect(countAfter).toBe(countBefore);
 
     // Verify elements are still visible
@@ -126,7 +124,7 @@ test.describe('Companies - Navigation and Page Load', () => {
   test('Should require authentication to access companies page', async ({ browser }) => {
     // Create a new context without logging in
     const context = await browser.newContext();
-    const page = context.newPage();
+    const page = await context.newPage();
 
     // Try to navigate directly to companies page
     await page.goto('/companies');

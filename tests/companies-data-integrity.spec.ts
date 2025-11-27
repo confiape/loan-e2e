@@ -14,14 +14,14 @@ test.describe('Companies - Data Integrity and Persistence', () => {
 
   test.describe('Page Refresh', () => {
     test('12.1: Should persist company data after page refresh', async ({ page }) => {
-      const initialCount = await companyActions.getTableRowCount();
+      const initialCount = await companyActions.getTableRowCount("Admin");
 
       // Refresh page
       await page.reload();
       await page.waitForLoadState('networkidle');
 
       // Count should remain the same
-      const afterRefreshCount = await companyActions.getTableRowCount();
+      const afterRefreshCount = await companyActions.getTableRowCount("Admin");
       expect(afterRefreshCount).toBe(initialCount);
 
       // Verify data is identical
@@ -206,7 +206,7 @@ test.describe('Companies - Data Integrity and Persistence', () => {
 
       // Open second tab
       const context2 = await browser.newContext();
-      const page2 = context2.newPage();
+      const page2 = await context2.newPage();
       await login(page2);
       const actions2 = new CompanyActions(page2);
       await actions2.navigateTo();
@@ -340,14 +340,14 @@ test.describe('Companies - Data Integrity and Persistence', () => {
 
       await companyActions.search(companyName);
       // Get initial count
-      const initialCount = await companyActions.getTableRowCount();
+      const initialCount = await companyActions.getTableRowCount(companyName);
 
       // Create company
       await companyActions.create({ name: companyName });
 
       // Count should increase
       await companyActions.search(companyName);
-      let currentCount = await companyActions.getTableRowCount();
+      let currentCount = await companyActions.getTableRowCount(companyName);
       expect(currentCount).toBe(initialCount + 1);
 
       // Edit company (should not change count)
@@ -355,13 +355,13 @@ test.describe('Companies - Data Integrity and Persistence', () => {
       await companyActions.edit(companyName, { name: updatedName });
 
       await companyActions.search(companyName);      
-      currentCount = await companyActions.getTableRowCount();
+      currentCount = await companyActions.getTableRowCount(companyName);
       expect(currentCount).toBe(initialCount + 1);
 
       // Delete company (count should decrease)
       await companyActions.delete(updatedName);
       await companyActions.search(companyName);
-      currentCount = await companyActions.getTableRowCount();
+      currentCount = await companyActions.getTableRowCount(companyName);
       expect(currentCount).toBe(initialCount);
     });
   });
